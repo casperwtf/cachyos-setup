@@ -798,5 +798,134 @@ echo -e "  ${C}JDK switching:${D}"
 echo -e "    ${Y}jdk 8 | 11 | 17 | 21 | 25${D}     → switch default JVM"
 echo -e "    ${Y}jdk${D}                            → list installed JDKs"
 echo -e ""
+
+# ══════════════════════════════════════════════════════════════════════════════
+# CONFIGURATION WIZARD — optional, interactive
+# ══════════════════════════════════════════════════════════════════════════════
+_wizard_ask() {
+  printf "\n  ${Y}?${D} $1 [Y/n] "
+  local r; read -r r; [[ "${r:-y}" =~ ^[Yy]$ ]]
+}
+
+_wizard_step() {
+  echo -e "\n${W}  ─── $* ───${D}"
+}
+
+echo -e "${W}━━━  Configuration Wizard  ━━━${D}"
+echo -e "  walks through things that need your input."
+printf "\n  run it? [Y/n] "; read -r _RUN_WIZARD
+if [[ "${_RUN_WIZARD:-y}" =~ ^[Yy]$ ]]; then
+
+  # ── Git identity ────────────────────────────────────────────────────────────
+  _wizard_step "Git identity"
+  if _wizard_ask "Set git name and email?"; then
+    printf "  name:  "; read -r _GIT_NAME
+    printf "  email: "; read -r _GIT_EMAIL
+    git config --global user.name  "$_GIT_NAME"
+    git config --global user.email "$_GIT_EMAIL"
+    ok "Git: $_GIT_NAME <$_GIT_EMAIL>"
+  fi
+
+  # ── SSH key ─────────────────────────────────────────────────────────────────
+  _wizard_step "SSH key (ed25519)"
+  if [[ ! -f "$HOME/.ssh/id_ed25519" ]]; then
+    if _wizard_ask "Generate SSH key?"; then
+      printf "  email for key (leave blank to use git email): "; read -r _SSH_EMAIL
+      _SSH_EMAIL="${_SSH_EMAIL:-${_GIT_EMAIL:-$(whoami)@$(hostname)}}"
+      ssh-keygen -t ed25519 -C "$_SSH_EMAIL" -f "$HOME/.ssh/id_ed25519" -N ""
+      eval "$(ssh-agent -s)" &>/dev/null
+      ssh-add "$HOME/.ssh/id_ed25519" 2>/dev/null
+      echo ""
+      echo -e "  ${C}Public key — add this to GitHub / GitLab / servers:${D}"
+      echo -e "  ${W}$(cat "$HOME/.ssh/id_ed25519.pub")${D}"
+    fi
+  else
+    ok "SSH key already exists at ~/.ssh/id_ed25519"
+    echo -e "  ${C}Public key:${D}"
+    echo -e "  ${W}$(cat "$HOME/.ssh/id_ed25519.pub")${D}"
+  fi
+
+  # ── GitHub CLI ──────────────────────────────────────────────────────────────
+  _wizard_step "GitHub CLI"
+  if _wizard_ask "Authenticate gh CLI? (opens browser)"; then
+    gh auth login
+  fi
+
+  # ── Node LTS via fnm ────────────────────────────────────────────────────────
+  _wizard_step "Node.js (fnm)"
+  if _wizard_ask "Install Node LTS + global tools (typescript, tsx, pnpm, prettier, eslint)?"; then
+    export FNM_DIR="$HOME/.local/share/fnm"
+    eval "$(fnm env)" 2>/dev/null || true
+    fnm install --lts
+    fnm use lts-latest 2>/dev/null || fnm use --lts
+    npm i -g typescript tsx pnpm prettier eslint
+    ok "Node $(node -v) + global tools installed."
+  fi
+
+  # ── Docker context ──────────────────────────────────────────────────────────
+  _wizard_step "Docker context"
+  echo -e "  default     → Docker Engine (CLI, always available)"
+  echo -e "  desktop     → Docker Desktop (GUI, separate VM context)"
+  if _wizard_ask "Switch to Docker Desktop context?"; then
+    docker context use desktop-linux 2>/dev/null && ok "Docker context → desktop-linux" \
+      || warn "Docker Desktop context not found — is Docker Desktop running?"
+  else
+    docker context use default 2>/dev/null || true
+    ok "Docker context → default (Engine)"
+  fi
+
+  # ── Tailscale ───────────────────────────────────────────────────────────────
+  _wizard_step "Tailscale"
+  if _wizard_ask "Connect Tailscale?"; then
+    sudo tailscale up
+  fi
+
+  # ── Mullvad ─────────────────────────────────────────────────────────────────
+  _wizard_step "Mullvad VPN"
+  if _wizard_ask "Log in to Mullvad? (enter account number)"; then
+    printf "  account number: "; read -r _MULLVAD_ACCT
+    mullvad account login "$_MULLVAD_ACCT" && ok "Mullvad logged in." \
+      || warn "Login failed — try: mullvad account login <number>"
+  fi
+
+  # ── 1Password ───────────────────────────────────────────────────────────────
+  _wizard_step "1Password SSH agent"
+  if _wizard_ask "Enable 1Password SSH agent integration?"; then
+    mkdir -p "$HOME/.config/1Password/ssh"
+    cat > "$HOME/.config/fish/conf.d/1password-ssh.fish" << 'OP'
+set -gx SSH_AUTH_SOCK "$HOME/.1password/agent.sock"
+OP
+    ok "SSH agent socket configured."
+    warn "Enable it in 1Password → Settings → Developer → SSH Agent."
+  fi
+
+  # ── JDK default ─────────────────────────────────────────────────────────────
+  _wizard_step "Default JDK"
+  echo -e "  installed: $(archlinux-java status 2>/dev/null | grep -v '^$' || echo 'none yet')"
+  if _wizard_ask "Set a default JDK now?"; then
+    printf "  version (8 / 11 / 17 / 21 / 25): "; read -r _JDK_VER
+    sudo archlinux-java set "java-${_JDK_VER}-openjdk" \
+      && ok "Default JDK → $_JDK_VER" \
+      || warn "Could not set JDK $_JDK_VER — check: archlinux-java status"
+  fi
+
+  # ── Wallpaper ───────────────────────────────────────────────────────────────
+  _wizard_step "Custom wallpaper"
+  if _wizard_ask "Set a custom wallpaper? (outside the bundled set)"; then
+    printf "  path to image: "; read -r _WALL_PATH
+    _WALL_PATH="${_WALL_PATH/#\~/$HOME}"
+    if [[ -f "$_WALL_PATH" ]]; then
+      cp "$_WALL_PATH" "$HOME/.local/share/wallpapers/rice/$(basename "$_WALL_PATH")"
+      plasma-apply-wallpaperimage "$_WALL_PATH" 2>/dev/null \
+        && ok "Wallpaper set." \
+        || warn "Set it manually: System Settings → Wallpaper"
+    else
+      warn "File not found: $_WALL_PATH"
+    fi
+  fi
+
+  echo -e "\n${G}  ✔  Wizard complete.${D}\n"
+fi
+
 echo -e "  ${C}Reboot now:${D}  ${Y}sudo reboot${D}"
 echo -e ""
