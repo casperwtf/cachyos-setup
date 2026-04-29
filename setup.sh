@@ -546,6 +546,7 @@ if section "Redis: RedisInsight GUI · NATS server + CLI"; then
   # NATS server + CLI
   aurin nats-server natscli
   # Quick systemd unit for local NATS dev server
+  mkdir -p "$HOME/.config/systemd/user"
   cat > "$HOME/.config/systemd/user/nats-dev.service" << 'NATS'
 [Unit]
 Description=NATS dev server (local)
