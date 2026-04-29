@@ -279,32 +279,32 @@ if section "KDE defaults (dark · Windows-style · minimal)"; then
   aurin  catppuccin-kde-git papirus-icon-theme bibata-cursor-theme \
          klassy                          # Clean window decorations
   # ── Core look ──────────────────────────────────────────────────────────────
-  kwriteconfig5 --file kdeglobals \
+  kwriteconfig6 --file kdeglobals \
     --group KDE      --key SingleClick false          # double-click (Windows habit)
-  kwriteconfig5 --file kdeglobals \
+  kwriteconfig6 --file kdeglobals \
     --group General  --key ColorScheme 'BreezeDark'
-  kwriteconfig5 --file kdeglobals \
+  kwriteconfig6 --file kdeglobals \
     --group Icons    --key Theme 'Papirus-Dark'
-  kwriteconfig5 --file kwinrc \
+  kwriteconfig6 --file kwinrc \
     --group org.kde.kdecoration2 --key library 'org.kde.klassy'
-  kwriteconfig5 --file kwinrc \
+  kwriteconfig6 --file kwinrc \
     --group Windows  --key BorderlessMaximizedWindows true
 
   # ── Taskbar behaviour (Windows-like) ───────────────────────────────────────
-  kwriteconfig5 --file plasmashellrc \
+  kwriteconfig6 --file plasmashellrc \
     --group PlasmaViews --key 'panelOpacity' 1        # opaque taskbar
 
   # ── Disable Baloo (file indexer — kills performance) ───────────────────────
   balooctl6 disable 2>/dev/null || balooctl disable 2>/dev/null || true
-  kwriteconfig5 --file baloofilerc \
+  kwriteconfig6 --file baloofilerc \
     --group 'Basic Settings' --key Indexing-Enabled false
 
   # ── Compositor — performance over prettiness ───────────────────────────────
-  kwriteconfig5 --file kwinrc \
+  kwriteconfig6 --file kwinrc \
     --group Compositing --key Backend OpenGL
-  kwriteconfig5 --file kwinrc \
+  kwriteconfig6 --file kwinrc \
     --group Compositing --key GLTextureFilter 2       # bilinear — fast
-  kwriteconfig5 --file kwinrc \
+  kwriteconfig6 --file kwinrc \
     --group Compositing --key LatencyControl 0        # lower input lag
 
   # ── Laptop: enable adaptive refresh if available ───────────────────────────
@@ -696,7 +696,7 @@ if section "Media: OBS · Audacity · Screenshot tools"; then
   # Flameshot covers 95% of its use (annotation, upload, region capture).
   pacin flameshot
   # Bind Flameshot to PrtSc in KDE:
-  kwriteconfig5 --file kglobalshortcutsrc \
+  kwriteconfig6 --file kglobalshortcutsrc \
     --group flameshot --key 'capture' 'Print,Print,Take screenshot'
   ok "OBS + Audacity + Flameshot installed."
   warn "ShareX is Windows-only. Flameshot covers region capture + annotation."
