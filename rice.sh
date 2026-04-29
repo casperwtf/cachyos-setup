@@ -518,10 +518,28 @@ extraItems=org.kde.plasma.bluetooth,org.kde.plasma.battery
 
 [Containments][2][Configuration]
 PreloadWeight=100
+
+[Containments][3]
+activityId=
+formfactor=2
+immutability=1
+lastScreen=0
+location=4
+plugin=org.kde.panel
+wallpaperplugin=org.kde.image
+
+[Containments][3][Applets][20]
+immutability=1
+plugin=org.kde.plasma.icontasks
+
+[Containments][3][Applets][20][Configuration][General]
+launchers=applications:com.mitchellh.ghostty.desktop,applications:vivaldi-stable.desktop,applications:signal-desktop.desktop,applications:discord.desktop,applications:slack-desktop.desktop,applications:rocketchat.desktop,applications:code.desktop,applications:dev.zed.Zed.desktop,applications:jetbrains-toolbox.desktop,applications:1password.desktop,applications:thunderbird.desktop,applications:gitbutler.desktop,applications:linear.desktop,applications:spotify.desktop,applications:steam.desktop,applications:org.prismlauncher.PrismLauncher.desktop,applications:docker-desktop.desktop,applications:openlens.desktop,applications:mongodb-compass.desktop,applications:dbeaver.desktop,applications:redisinsight.desktop,applications:bruno.desktop,applications:com.obsproject.Studio.desktop,applications:org.kde.dolphin.desktop
+
+[Containments][3][Configuration]
+PreloadWeight=100
 APLRC
 
-# plasmashellrc — thin, top, not floating (no pill gap needed here)
-# Full-width bar like GNOME top panel
+# plasmashellrc — top bar thin + bottom dock
 python3 - "$SHELLRC" << 'PYEOF'
 import os, sys
 
@@ -532,18 +550,28 @@ if os.path.exists(path):
     with open(path) as f:
         skip = False
         for line in f:
-            if '[PlasmaViews][Panel 2]' in line:
+            if '[PlasmaViews][Panel 2]' in line or '[PlasmaViews][Panel 3]' in line:
                 skip = True
-            elif line.startswith('[') and skip and '[PlasmaViews][Panel 2]' not in line:
+            elif line.startswith('[') and skip and \
+                 '[PlasmaViews][Panel 2]' not in line and \
+                 '[PlasmaViews][Panel 3]' not in line:
                 skip = False
             if not skip:
                 lines.append(line)
 
+# Top bar — thin, full-width, flush
 lines.append('\n[PlasmaViews][Panel 2][Defaults]\n')
-lines.append('floating=0\n')          # attached — full-width flush top bar
-lines.append('panelLengthMode=1\n')   # 1 = fill width
+lines.append('floating=0\n')
+lines.append('panelLengthMode=1\n')
+lines.append('panelVisibility=0\n')
+lines.append('thickness=28\n')
+
+# Bottom dock — icons only, fit content, floating
+lines.append('\n[PlasmaViews][Panel 3][Defaults]\n')
+lines.append('floating=1\n')
+lines.append('panelLengthMode=0\n')   # fit content
 lines.append('panelVisibility=0\n')   # always visible
-lines.append('thickness=28\n')        # thin — 28px matches the screenshots
+lines.append('thickness=56\n')        # taller for icon dock
 
 with open(path, 'w') as f:
     f.writelines(lines)
@@ -552,9 +580,9 @@ PYEOF
 ok "Panel config written."
 
 # ══════════════════════════════════════════════════════════════════════════════
-# 11. MISC KDE SETTINGS
+# 11. KDE SETTINGS — full power desktop defaults
 # ══════════════════════════════════════════════════════════════════════════════
-log "Applying KDE behaviour settings..."
+log "Applying KDE settings..."
 
 # Double-click (Windows muscle memory)
 kwriteconfig6 --file kdeglobals --group KDE --key SingleClick false
@@ -572,19 +600,80 @@ balooctl6 disable 2>/dev/null || balooctl disable 2>/dev/null || true
 kwriteconfig6 --file baloofilerc \
   --group 'Basic Settings' --key Indexing-Enabled false
 
-# KRunner: free-floating, centered (like GNOME's search in overview)
+# KRunner — free floating, centered
 kwriteconfig6 --file krunnerrc --group General --key FreeFloating true
 
 # Window snapping
 kwriteconfig6 --file kwinrc --group Windows --key ElectricBorderTiling     true
 kwriteconfig6 --file kwinrc --group Windows --key ElectricBorderCornerRatio 0.25
 
-# Accent color — pull from wallpaper (dusty rose to match aesthetic)
-# Set to a warm rose color matching the Rosé Pine Love color #eb6f92
-kwriteconfig6 --file kdeglobals \
-  --group General --key AccentColor '235,111,146'    # #eb6f92 — warm rose
-kwriteconfig6 --file kdeglobals \
-  --group General --key accentColorFromWallpaper true # or let KDE pull from wallpaper
+# Accent colour — rose (#eb6f92)
+kwriteconfig6 --file kdeglobals --group General --key AccentColor '235,111,146'
+kwriteconfig6 --file kdeglobals --group General --key accentColorFromWallpaper false
+
+# Task switcher — thumbnail grid (cleaner than default)
+kwriteconfig6 --file kwinrc --group TabBox --key LayoutName 'thumbnail_grid'
+
+# Scrolling — natural (like Windows)
+kwriteconfig6 --file kcminputrc --group Libinput --key NaturalScroll true
+
+# Click method — modern touchpad behaviour
+kwriteconfig6 --file kcminputrc --group Libinput --key TapToClick true
+kwriteconfig6 --file kcminputrc --group Libinput --key TwoFingerTap true
+
+# File manager — show hidden files by default
+kwriteconfig6 --file dolphinrc --group General --key ShowHiddenFiles false
+kwriteconfig6 --file dolphinrc --group General --key ViewMode 1   # icon view
+
+# Clipboard — keep 30 entries
+kwriteconfig6 --file klipperrc --group General --key MaxClipItems 30
+kwriteconfig6 --file klipperrc --group General --key KeepClipboardContents true
+
+# Notifications — do not disturb during fullscreen (gaming)
+kwriteconfig6 --file plasmanotifyrc \
+  --group Notifications --key InhibitNotificationsWhenScreensMirrored true
+
+# Power — never sleep, never dim, never lock
+kwriteconfig6 --file kscreenlockerrc --group Daemon --key Autolock false
+kwriteconfig6 --file kscreenlockerrc --group Daemon --key Timeout 0
+
+POWER_CFG="$HOME/.config/powermanagementprofilesrc"
+mkdir -p "$(dirname "$POWER_CFG")"
+cat > "$POWER_CFG" << 'POWER'
+[AC][BrightnessControl]
+value=100
+
+[AC][DPMSControl]
+idleTime=0
+lockBeforeTurnOff=0
+
+[AC][DimDisplay]
+idleTime=0
+
+[AC][HandleButtonEvents]
+lidAction=0
+powerButtonAction=1
+
+[AC][SuspendSession]
+idleTime=0
+suspendThenHibernate=false
+suspendType=0
+
+[Battery][BrightnessControl]
+value=100
+
+[Battery][DPMSControl]
+idleTime=0
+lockBeforeTurnOff=0
+
+[Battery][SuspendSession]
+idleTime=0
+suspendType=0
+
+[LowBattery][SuspendSession]
+idleTime=0
+suspendType=0
+POWER
 
 ok "KDE settings applied."
 
@@ -609,18 +698,35 @@ else
 fi
 
 # ══════════════════════════════════════════════════════════════════════════════
-# 13. GHOSTTY — update theme to Rosé Pine
+# 13. GHOSTTY — ensure theme file exists
 # ══════════════════════════════════════════════════════════════════════════════
-log "Updating Ghostty theme to Rosé Pine..."
+log "Writing Ghostty rose-pine theme..."
 
-GHOSTTY_CFG="$HOME/.config/ghostty/config"
-if [[ -f "$GHOSTTY_CFG" ]]; then
-  sed -i 's/^theme =.*/theme = rose-pine/' "$GHOSTTY_CFG" && \
-    ok "Ghostty theme → rose-pine" || \
-    warn "Could not update Ghostty config — set 'theme = rose-pine' manually."
-else
-  warn "Ghostty config not found — run setup.sh first."
-fi
+mkdir -p "$HOME/.config/ghostty/themes"
+cat > "$HOME/.config/ghostty/themes/rose-pine" << 'THEME'
+palette = 0=#191724
+palette = 1=#eb6f92
+palette = 2=#31748f
+palette = 3=#f6c177
+palette = 4=#9ccfd8
+palette = 5=#c4a7e7
+palette = 6=#ebbcba
+palette = 7=#e0def4
+palette = 8=#26233a
+palette = 9=#eb6f92
+palette = 10=#31748f
+palette = 11=#f6c177
+palette = 12=#9ccfd8
+palette = 13=#c4a7e7
+palette = 14=#ebbcba
+palette = 15=#e0def4
+background = 191724
+foreground = e0def4
+cursor-color = e0def4
+selection-background = 403d52
+selection-foreground = e0def4
+THEME
+ok "Ghostty theme file written."
 
 # ══════════════════════════════════════════════════════════════════════════════
 # 14. RELOAD

@@ -161,7 +161,32 @@ format      = "[$time](dim white) "
 time_format = "%H:%M"
 STAR
 
-mkdir -p "$HOME/.config/ghostty"
+mkdir -p "$HOME/.config/ghostty" "$HOME/.config/ghostty/themes"
+
+# Write the rose-pine theme file — Ghostty looks for it in ~/.config/ghostty/themes/
+cat > "$HOME/.config/ghostty/themes/rose-pine" << 'THEME'
+palette = 0=#191724
+palette = 1=#eb6f92
+palette = 2=#31748f
+palette = 3=#f6c177
+palette = 4=#9ccfd8
+palette = 5=#c4a7e7
+palette = 6=#ebbcba
+palette = 7=#e0def4
+palette = 8=#26233a
+palette = 9=#eb6f92
+palette = 10=#31748f
+palette = 11=#f6c177
+palette = 12=#9ccfd8
+palette = 13=#c4a7e7
+palette = 14=#ebbcba
+palette = 15=#e0def4
+background = 191724
+foreground = e0def4
+cursor-color = e0def4
+selection-background = 403d52
+selection-foreground = e0def4
+THEME
 cat > "$HOME/.config/ghostty/config" << 'GHOSTTY'
 theme                = rose-pine
 font-family          = JetBrainsMono Nerd Font
@@ -229,7 +254,9 @@ pacin \
   `# media` \
   obs-studio audacity v4l2loopback-dkms flameshot \
   `# tweaks` \
-  reflector zram-generator irqbalance
+  reflector zram-generator irqbalance \
+  `# power + keyboard` \
+  cpupower brightnessctl power-profiles-daemon
 ok "pacman batch done."
 
 # ── AUR — one call ────────────────────────────────────────────────────────────
@@ -265,7 +292,9 @@ aurin \
   `# dev tools` \
   yourkit blockbench-bin bruno-bin \
   `# flatpak` \
-  flatpak
+  flatpak \
+  `# keyboard RGB` \
+  openrgb
 ok "AUR batch done."
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -513,7 +542,95 @@ FONTCONF
   ok "Font rendering: subpixel LCD configured."
 }
 
-# ── bashrc JDK helper (fallback for bash) ─────────────────────────────────────
+# ── Full power — no throttling, no sleep, max performance ────────────────────
+_cfg_power() {
+  # CPU — performance governor
+  sudo cpupower frequency-set -g performance &>/dev/null || true
+  # Persist across reboots
+  sudo mkdir -p /etc/systemd/system/cpupower.service.d
+  cat << 'EOF' | sudo tee /etc/systemd/system/cpupower.service.d/performance.conf >/dev/null
+[Service]
+ExecStart=
+ExecStart=/usr/bin/cpupower frequency-set -g performance
+EOF
+  sudo systemctl enable cpupower.service 2>/dev/null || true
+
+  # Power profile daemon → performance
+  powerprofilesctl set performance 2>/dev/null || true
+
+  # USB autosuspend — disable (stops peripherals dropping out)
+  echo -1 | sudo tee /sys/module/usbcore/parameters/autosuspend &>/dev/null || true
+  echo 'options usbcore autosuspend=-1' \
+    | sudo tee /etc/modprobe.d/disable-usb-autosuspend.conf >/dev/null
+
+  # KDE power management — never sleep, never dim, never lock on idle
+  POWER_CFG="$HOME/.config/powermanagementprofilesrc"
+  mkdir -p "$(dirname "$POWER_CFG")"
+  cat > "$POWER_CFG" << 'POWER'
+[AC][BrightnessControl]
+value=100
+
+[AC][DPMSControl]
+idleTime=0
+lockBeforeTurnOff=0
+
+[AC][DimDisplay]
+idleTime=0
+
+[AC][HandleButtonEvents]
+lidAction=0
+powerButtonAction=1
+powerDownAction=1
+
+[AC][SuspendSession]
+idleTime=0
+suspendThenHibernate=false
+suspendType=0
+
+[Battery][BrightnessControl]
+value=100
+
+[Battery][DPMSControl]
+idleTime=0
+lockBeforeTurnOff=0
+
+[Battery][SuspendSession]
+idleTime=0
+suspendType=0
+
+[LowBattery][SuspendSession]
+idleTime=0
+suspendType=0
+POWER
+
+  # Screen locker — disable auto-lock
+  kwriteconfig6 --file kscreenlockerrc \
+    --group Daemon --key Autolock false
+  kwriteconfig6 --file kscreenlockerrc \
+    --group Daemon --key Timeout 0
+
+  # Keyboard backlight — max brightness on login
+  if command -v brightnessctl &>/dev/null; then
+    # Try common keyboard backlight device paths
+    for dev in /sys/class/leds/*kbd*; do
+      [[ -d "$dev" ]] && brightnessctl --device="$(basename "$dev")" set 100% &>/dev/null || true
+    done
+    # Persist via udev rule
+    cat << 'UDEV' | sudo tee /etc/udev/rules.d/90-kbd-backlight.rules >/dev/null
+ACTION=="add", SUBSYSTEM=="leds", KERNEL=="*kbd*", \
+  RUN+="/usr/bin/brightnessctl --device=%k set 100%%"
+UDEV
+  fi
+
+  # OpenRGB — enable udev rules for non-root access
+  if command -v openrgb &>/dev/null; then
+    sudo openrgb --startminimized 2>/dev/null || true
+    # udev rules ship with openrgb — just reload
+    sudo udevadm control --reload-rules 2>/dev/null || true
+  fi
+
+  ok "Power: CPU=performance, no sleep, no dim, keyboard backlight=max."
+}
 _cfg_bashrc() {
   cat >> "$HOME/.bashrc" << 'BASH'
 
@@ -546,6 +663,7 @@ _cfg_git           & _jobs+=($!)
 _cfg_flatpak       & _jobs+=($!)
 _cfg_fontrendering & _jobs+=($!)
 _cfg_bashrc        & _jobs+=($!)
+_cfg_power         & _jobs+=($!)
 
 log "Waiting for ${#_jobs[@]} config jobs..."
 _failed=0
