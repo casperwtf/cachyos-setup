@@ -530,11 +530,65 @@ immutability=1
 plugin=org.kde.plasma.icontasks
 
 [Containments][3][Applets][20][Configuration][General]
-launchers=applications:com.mitchellh.ghostty.desktop,applications:vivaldi-stable.desktop,applications:signal-desktop.desktop,applications:discord.desktop,applications:slack-desktop.desktop,applications:rocketchat.desktop,applications:code.desktop,applications:dev.zed.Zed.desktop,applications:jetbrains-toolbox.desktop,applications:1password.desktop,applications:thunderbird.desktop,applications:gitbutler.desktop,applications:linear.desktop,applications:spotify.desktop,applications:steam.desktop,applications:org.prismlauncher.PrismLauncher.desktop,applications:docker-desktop.desktop,applications:openlens.desktop,applications:mongodb-compass.desktop,applications:dbeaver.desktop,applications:redisinsight.desktop,applications:bruno.desktop,applications:com.obsproject.Studio.desktop,applications:org.kde.dolphin.desktop
+launchers=LAUNCHER_PLACEHOLDER
 
 [Containments][3][Configuration]
 PreloadWeight=100
 APLRC
+
+# ── Build launcher list by finding actual installed .desktop files ────────────
+log "Discovering installed .desktop files for dock..."
+
+_find_desktop() {
+  local name="$1"; shift
+  local candidates=("$@")
+  local search_dirs=(
+    "$HOME/.local/share/applications"
+    "/usr/share/applications"
+    "/usr/local/share/applications"
+  )
+  for candidate in "${candidates[@]}"; do
+    for dir in "${search_dirs[@]}"; do
+      [[ -f "$dir/$candidate" ]] && echo "applications:$candidate" && return
+    done
+  done
+}
+
+LAUNCHERS=()
+_add() { local r; r=$(_find_desktop "$@"); [[ -n "$r" ]] && LAUNCHERS+=("$r"); }
+
+_add ghostty      com.mitchellh.ghostty.desktop ghostty.desktop
+_add vivaldi      vivaldi-stable.desktop vivaldi.desktop
+_add librewolf    librewolf.desktop librewolf-bin.desktop
+_add signal       signal-desktop.desktop signal.desktop
+_add discord      discord.desktop Discord.desktop
+_add discordcanary discord-canary.desktop
+_add slack        slack-desktop.desktop slack.desktop
+_add rocketchat   rocketchat-desktop.desktop rocketchat.desktop org.rocket.RocketChat.desktop
+_add vscode       code.desktop visual-studio-code.desktop code-oss.desktop
+_add zed          dev.zed.Zed.desktop zed.desktop zed-preview.desktop
+_add toolbox      jetbrains-toolbox.desktop
+_add 1password    1password.desktop _1password.desktop
+_add thunderbird  thunderbird.desktop mozilla-thunderbird.desktop
+_add gitbutler    gitbutler-bin.desktop gitbutler.desktop
+_add linear       linear.desktop linear-app.desktop
+_add spotify      spotify.desktop com.spotify.Client.desktop
+_add steam        steam.desktop
+_add prism        org.prismlauncher.PrismLauncher.desktop prismlauncher.desktop
+_add docker       docker-desktop.desktop
+_add lens         openlens.desktop OpenLens.desktop lens.desktop
+_add compass      mongodb-compass.desktop
+_add dbeaver      dbeaver-ce.desktop dbeaver.desktop DBeaver.desktop
+_add redis        redisinsight.desktop redisinsight-bin.desktop RedisInsight.desktop
+_add bruno        bruno.desktop
+_add obs          com.obsproject.Studio.desktop obs.desktop
+_add dolphin      org.kde.dolphin.desktop dolphin.desktop
+
+LAUNCHER_STR=$(IFS=','; echo "${LAUNCHERS[*]}")
+log "Found ${#LAUNCHERS[@]} apps for dock"
+
+# Patch the placeholder in appletsrc
+sed -i "s|launchers=LAUNCHER_PLACEHOLDER|launchers=$LAUNCHER_STR|" "$APPLETSRC"
 
 # plasmashellrc — top bar thin + bottom dock
 python3 - "$SHELLRC" << 'PYEOF'
@@ -600,9 +654,19 @@ kwriteconfig6 --file baloofilerc \
 # KRunner — free floating, centered
 kwriteconfig6 --file krunnerrc --group General --key FreeFloating true
 
-# Window snapping
+# Window snapping — edges only, NOT corners (corners cause the ghosting)
 kwriteconfig6 --file kwinrc --group Windows --key ElectricBorderTiling     true
-kwriteconfig6 --file kwinrc --group Windows --key ElectricBorderCornerRatio 0.25
+kwriteconfig6 --file kwinrc --group Windows --key ElectricBorderCornerRatio 0.0
+
+# Disable all electric border corner actions explicitly
+kwriteconfig6 --file kwinrc --group ElectricBorders --key Bottom         None
+kwriteconfig6 --file kwinrc --group ElectricBorders --key BottomLeft     None
+kwriteconfig6 --file kwinrc --group ElectricBorders --key BottomRight    None
+kwriteconfig6 --file kwinrc --group ElectricBorders --key Left           None
+kwriteconfig6 --file kwinrc --group ElectricBorders --key Right          None
+kwriteconfig6 --file kwinrc --group ElectricBorders --key Top            None
+kwriteconfig6 --file kwinrc --group ElectricBorders --key TopLeft        None
+kwriteconfig6 --file kwinrc --group ElectricBorders --key TopRight       None
 
 # Accent colour — rose (#eb6f92)
 kwriteconfig6 --file kdeglobals --group General --key AccentColor '235,111,146'

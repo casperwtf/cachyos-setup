@@ -78,7 +78,7 @@ section "Phase 1 — terminal · fish · starship · ghostty"
 aurin ghostty
 pacin fish starship zoxide fzf fd ripgrep bat eza tmux
 
-chsh -s "$(command -v fish)"
+sudo usermod -s "$(command -v fish)" "$USER"
 ok "Default shell → fish."
 
 FISH_CFG="$HOME/.config/fish/config.fish"
@@ -163,7 +163,7 @@ STAR
 
 mkdir -p "$HOME/.config/ghostty" "$HOME/.config/ghostty/themes"
 
-# Write the rose-pine theme file — Ghostty looks for it in ~/.config/ghostty/themes/
+# Write the rose-pine theme file
 cat > "$HOME/.config/ghostty/themes/rose-pine" << 'THEME'
 palette = 0=#191724
 palette = 1=#eb6f92
@@ -187,23 +187,24 @@ cursor-color = e0def4
 selection-background = 403d52
 selection-foreground = e0def4
 THEME
+
 cat > "$HOME/.config/ghostty/config" << 'GHOSTTY'
-theme                = rose-pine
-font-family          = JetBrainsMono Nerd Font
-font-size            = 13
-font-thicken         = true
-window-decoration    = false
-window-padding-x     = 12
-window-padding-y     = 8
-background-opacity   = 0.97
+theme                  = rose-pine
+font-family            = JetBrainsMono Nerd Font
+font-size              = 13
+font-thicken           = true
+# no window-decoration line — let KDE/Klassy draw the titlebar
+window-padding-x       = 12
+window-padding-y       = 8
+background-opacity     = 0.97
 background-blur-radius = 20
-shell-integration    = fish
-scrollback-limit     = 10000
-copy-on-select       = clipboard
-cursor-style         = bar
-cursor-style-blink   = true
-gtk-tabs-location    = bottom
-gtk-wide-tabs        = false
+shell-integration      = fish
+scrollback-limit       = 10000
+copy-on-select         = clipboard
+cursor-style           = bar
+cursor-style-blink     = true
+gtk-tabs-location      = bottom
+gtk-wide-tabs          = false
 keybind = ctrl+shift+t=new_tab
 keybind = ctrl+shift+w=close_surface
 keybind = ctrl+shift+c=copy_to_clipboard
@@ -216,7 +217,6 @@ keybind = ctrl+shift+e=new_split:down
 keybind = ctrl+shift+left_bracket=goto_split:previous
 keybind = ctrl+shift+right_bracket=goto_split:next
 GHOSTTY
-
 ok "Phase 1 done."
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -232,8 +232,7 @@ pacin \
   ttf-liberation ttf-dejavu otf-font-awesome \
   `# KDE tooling` \
   kvantum qt5ct qt6ct \
-  `# browsers` \
-  chromium \
+  `# browsers — chromium via ungoogled-chromium-bin in AUR batch` \
   `# comms` \
   discord signal-desktop \
   `# dev base` \
@@ -266,7 +265,7 @@ aurin \
   `# fonts` \
   ttf-ms-win11-auto \
   `# KDE theme` \
-  catppuccin-kde-git papirus-icon-theme bibata-cursor-theme klassy \
+  catppuccin-kde-git papirus-icon-theme bibata-cursor-theme klassy-bin \
   `# browsers` \
   vivaldi vivaldi-ffmpeg-codecs librewolf-bin ungoogled-chromium-bin tor-browser \
   `# comms` \
@@ -684,7 +683,7 @@ section "Phase 4 — JDKs · Node · post-install"
 
 # ── JDKs ─────────────────────────────────────────────────────────────────────
 log "Discovering OpenJDK LTS packages..."
-AVAILABLE_JDKS=$(pacman -Ssq '^jdk[0-9]+-openjdk$' 2>/dev/null || true)
+AVAILABLE_JDKS=$(pacman -Ssq '^jdk[0-9]+-openjdk$' 2>/dev/null | sort -V | uniq || true)
 if [[ -n "$AVAILABLE_JDKS" ]]; then
   log "Found: $(echo "$AVAILABLE_JDKS" | tr '\n' ' ')"
   # shellcheck disable=SC2086
@@ -694,20 +693,16 @@ else
   pacin jdk8-openjdk jdk11-openjdk jdk17-openjdk jdk21-openjdk 2>/dev/null || true
 fi
 
-INSTALLED_VERSIONS=$(archlinux-java status 2>/dev/null | grep -oP 'java-\K[0-9]+' | sort -n || true)
+INSTALLED_VERSIONS=$(archlinux-java status 2>/dev/null | grep -oP 'java-\K[0-9]+(?=-openjdk)' | sort -n | uniq || true)
 HIGHEST=$(echo "$INSTALLED_VERSIONS" | tail -1)
 if [[ -n "$HIGHEST" ]]; then
   NEXT=$(( HIGHEST + 4 ))
-  aurin "jdk${NEXT}-openjdk" 2>/dev/null \
-    && ok "jdk${NEXT}-openjdk installed from AUR." \
-    || log "jdk${NEXT} not in AUR yet — you have the latest."
-fi
-
-LATEST_JDK=$(archlinux-java status 2>/dev/null \
-  | grep -oP 'java-\K[0-9]+-openjdk' | sort -t- -k1 -n | tail -1)
-if [[ -n "$LATEST_JDK" ]]; then
-  sudo archlinux-java set "java-${LATEST_JDK}" 2>/dev/null || true
-  ok "Default JDK → java-${LATEST_JDK}"
+  log "Trying AUR for jdk${NEXT}-openjdk..."
+  if paru -S --needed --noconfirm "jdk${NEXT}-openjdk" &>/dev/null; then
+    ok "jdk${NEXT}-openjdk installed from AUR."
+  else
+    log "jdk${NEXT} not in AUR yet — you have the latest."
+  fi
 fi
 
 # ── Node via fnm ─────────────────────────────────────────────────────────────
