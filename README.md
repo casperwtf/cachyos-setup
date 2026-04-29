@@ -3,7 +3,7 @@
 post-install scripts for CachyOS KDE. built for my own use, sharing it anyway.
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/YOUR_USERNAME/cachyos-setup/main/install.sh)
+bash <(curl -fsSL https://raw.githubusercontent.com/casperwtf/cachyos-setup/main/install.sh)
 ```
 
 clones the repo to `~/cachyos-setup` then asks what to run.

@@ -3,7 +3,7 @@
 
 set -euo pipefail
 
-REPO="https://github.com/YOUR_USERNAME/cachyos-setup"
+REPO="https://github.com/casperwtf/cachyos-setup"
 DEST="$HOME/cachyos-setup"
 
 if [[ -d "$DEST/.git" ]]; then
