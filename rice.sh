@@ -458,13 +458,10 @@ immutability=1
 lastScreen=0
 location=0
 plugin=org.kde.desktopcontainment
-wallpaperplugin=org.kde.slideshow
+wallpaperplugin=org.kde.image
 
-[Containments][1][Wallpaper][org.kde.slideshow][General]
-SlidePaths=$HOME/.local/share/wallpapers/rice
-SlideInterval=1800
-FillMode=2
-Shuffle=true
+[Containments][1][Wallpaper][org.kde.image][General]
+Image=
 
 [Containments][2]
 activityId=
@@ -678,9 +675,9 @@ POWER
 ok "KDE settings applied."
 
 # ══════════════════════════════════════════════════════════════════════════════
-# 12. WALLPAPERS — copy from repo, configure slideshow (30 min rotation)
+# 12. WALLPAPERS
 # ══════════════════════════════════════════════════════════════════════════════
-log "Setting up wallpaper rotation..."
+log "Setting up wallpapers..."
 
 WALL_DIR="$HOME/.local/share/wallpapers/rice"
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -689,12 +686,42 @@ REPO_WALLS="$REPO_DIR/wallpapers"
 mkdir -p "$WALL_DIR"
 
 if [[ -d "$REPO_WALLS" ]]; then
-  cp "$REPO_WALLS"/*.{jpg,jpeg,png,webp} "$WALL_DIR/" 2>/dev/null || true
-  COUNT=$(ls "$WALL_DIR" | wc -l)
+  find "$REPO_WALLS" -maxdepth 1 \
+    \( -iname "*.jpg" -o -iname "*.jpeg" -o -iname "*.png" -o -iname "*.webp" \) \
+    -exec cp {} "$WALL_DIR/" \;
+  COUNT=$(find "$WALL_DIR" -maxdepth 1 -type f | wc -l)
   ok "$COUNT wallpapers copied to $WALL_DIR"
 else
-  warn "wallpapers/ dir not found next to rice.sh — expected repo layout."
-  warn "make sure you cloned the repo and are running from inside it."
+  warn "wallpapers/ not found next to rice.sh"
+fi
+
+# Apply wallpaper — try slideshow first, fall back to first image
+FIRST_WALL=$(find "$WALL_DIR" -maxdepth 1 -type f \
+  \( -iname "*.jpg" -o -iname "*.jpeg" -o -iname "*.png" -o -iname "*.webp" \) \
+  | sort | head -1)
+
+if [[ -n "$FIRST_WALL" ]]; then
+  # Apply immediately via plasma-apply-wallpaperimage
+  plasma-apply-wallpaperimage "$FIRST_WALL" 2>/dev/null && \
+    ok "Wallpaper applied: $(basename "$FIRST_WALL")" || true
+
+  # Set slideshow via qdbus (works on running session)
+  # This tells the desktop containment to switch to slideshow plugin
+  qdbus6 org.kde.plasmashell /PlasmaShell \
+    org.kde.PlasmaShell.evaluateScript "
+      var allDesktops = desktops();
+      for (var i = 0; i < allDesktops.length; i++) {
+        var d = allDesktops[i];
+        d.wallpaperPlugin = 'org.kde.slideshow';
+        d.currentConfigGroup = ['Wallpaper', 'org.kde.slideshow', 'General'];
+        d.writeConfig('SlidePaths', '$WALL_DIR');
+        d.writeConfig('SlideInterval', 1800);
+        d.writeConfig('Shuffle', true);
+      }
+    " 2>/dev/null && ok "Slideshow configured (30 min rotation, shuffled)." || \
+    warn "Could not set slideshow via qdbus — wallpaper still applied as static."
+else
+  warn "No wallpapers found in $WALL_DIR — add images and re-run."
 fi
 
 # ══════════════════════════════════════════════════════════════════════════════
