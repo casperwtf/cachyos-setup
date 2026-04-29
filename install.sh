@@ -1,20 +1,21 @@
 #!/usr/bin/env bash
-# entry point — clones the repo so scripts have access to bundled wallpapers
+# run after downloading the repo:
+#   mkdir -p ~/cachyos-setup && curl -fsSL https://api.github.com/repos/casperwtf/cachyos-setup/tarball/main | tar -xz -C ~/cachyos-setup --strip-components=1 && bash ~/cachyos-setup/install.sh
+#
+# to pull the latest version before running:
+#   bash ~/cachyos-setup/install.sh --update
 
 set -euo pipefail
 
-REPO="https://github.com/casperwtf/cachyos-setup"
-DEST="$HOME/cachyos-setup"
+REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+TARBALL="https://api.github.com/repos/casperwtf/cachyos-setup/tarball/main"
 
-if [[ -d "$DEST/.git" ]]; then
-    echo "  repo exists at $DEST, pulling latest..."
-    git -C "$DEST" pull --ff-only
-else
-    echo "  cloning $REPO..."
-    git clone --depth 1 "$REPO" "$DEST"
+if [[ "${1:-}" == "--update" ]]; then
+    echo "  pulling latest..."
+    curl -fsSL "$TARBALL" | tar -xz -C "$REPO_DIR" --strip-components=1
+    echo "  updated."
+    echo ""
 fi
-
-cd "$DEST"
 
 echo ""
 echo "  what do you want to run?"
@@ -27,8 +28,8 @@ printf "  [1/2/3]: "
 read -r choice
 
 case "$choice" in
-    1) bash "$DEST/setup.sh"  ;;
-    2) bash "$DEST/rice.sh"   ;;
-    3) bash "$DEST/setup.sh"; bash "$DEST/rice.sh" ;;
+    1) bash "$REPO_DIR/setup.sh"  ;;
+    2) bash "$REPO_DIR/rice.sh"   ;;
+    3) bash "$REPO_DIR/setup.sh"; bash "$REPO_DIR/rice.sh" ;;
     *) echo "  invalid"; exit 1 ;;
 esac
