@@ -592,8 +592,6 @@ fi
 # ══════════════════════════════════════════════════════════════════════════════
 if section "Android: adb · scrcpy (screen mirror) · MTP file transfer"; then
   pacin android-tools android-udev scrcpy gvfs-mtp
-  # udev rules so device appears without root
-  sudo systemctl restart udev || true
   sudo usermod -aG adbusers "$USER" 2>/dev/null || true
   ok "Android tools installed."
   log "Plug in device → enable USB Debugging → run: adb devices"
@@ -628,8 +626,11 @@ if section "VPN + Network: Mullvad · Tailscale · WireGuard · Wireshark"; then
 
   aurin mullvad-vpn-bin
 
-  sudo systemctl enable --now mullvad-daemon.service
-  sudo systemctl enable --now tailscaled.service
+  # enable only — don't start now. mullvad's kill switch blocks all traffic
+  # if the daemon starts before you've logged in and configured it.
+  # it will start on next boot, after you've set it up via the app.
+  sudo systemctl enable mullvad-daemon.service
+  sudo systemctl enable tailscaled.service
 
   # Wireshark — allow non-root capture
   sudo usermod -aG wireshark "$USER"
