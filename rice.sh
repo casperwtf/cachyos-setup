@@ -202,7 +202,7 @@ log "Applying Rosé Pine..."
 plasma-apply-colorscheme RosePine 2>/dev/null || \
   kwriteconfig6 --file kdeglobals --group General --key ColorScheme 'RosePine'
 
-plasma-apply-desktoptheme 'Breeze Dark' 2>/dev/null || \
+plasma-apply-desktoptheme 'breeze-dark' 2>/dev/null || \
   kwriteconfig6 --file plasmarc --group Theme --key name 'breeze-dark'
 ok "Plasma theme set to Breeze Dark (neutral, doesn't fight the color scheme)."
 
@@ -213,8 +213,26 @@ ok "Plasma theme set to Breeze Dark (neutral, doesn't fight the color scheme)."
 # ══════════════════════════════════════════════════════════════════════════════
 log "Configuring Kvantum..."
 
-kvantummanager --set Catppuccin-Mocha-Mauve 2>/dev/null || \
-  warn "Set Kvantum theme manually: run kvantummanager → select Catppuccin-Mocha or similar"
+# Write kvantum config directly — kvantummanager --set opens a GUI
+mkdir -p "$HOME/.config/Kvantum"
+cat > "$HOME/.config/Kvantum/kvantum.kvconfig" << 'KV'
+[General]
+theme=KvArcDark
+KV
+
+# Use a theme that's reliably installed alongside kvantum
+# If catppuccin kvantum theme installed successfully, prefer that
+if [[ -d "$HOME/.local/share/Kvantum/Catppuccin-Mocha-Mauve" || \
+      -d "/usr/share/Kvantum/Catppuccin-Mocha-Mauve" ]]; then
+  sed -i 's/^theme=.*/theme=Catppuccin-Mocha-Mauve/' "$HOME/.config/Kvantum/kvantum.kvconfig"
+elif [[ -d "/usr/share/Kvantum/KvArcDark" ]]; then
+  : # already set above
+else
+  # Fall back to whatever's available
+  AVAILABLE=$(ls /usr/share/Kvantum/ 2>/dev/null | head -1)
+  [[ -n "$AVAILABLE" ]] && \
+    sed -i "s/^theme=.*/theme=$AVAILABLE/" "$HOME/.config/Kvantum/kvantum.kvconfig"
+fi
 
 kwriteconfig6 --file qt5ct/qt5ct.conf --group Appearance --key style kvantum
 kwriteconfig6 --file qt6ct/qt6ct.conf --group Appearance --key style kvantum
