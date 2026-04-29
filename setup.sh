@@ -429,40 +429,61 @@ fi
 # ══════════════════════════════════════════════════════════════════════════════
 # 7. JDKs — all LTS since 8 + switcher
 # ══════════════════════════════════════════════════════════════════════════════
-if section "JDKs: 8 · 11 · 17 · 21 · 25 + jdk() switcher"; then
-  # ── Install LTS JDKs ───────────────────────────────────────────────────────
-  # JDK 8, 11, 17 come from extra/community; 21 from extra; 25 may need AUR
-  pacin jdk8-openjdk jdk11-openjdk jdk17-openjdk jdk21-openjdk || true
-  # JDK 25 (latest LTS, September 2025)
-  aurin jdk25-openjdk 2>/dev/null || \
-    pacin jdk-openjdk 2>/dev/null || \
-    warn "JDK 25 not found — install manually or via SDKMAN."
+if section "JDKs: all OpenJDK LTS (8·11·17·21·25+) + jdk() switcher"; then
 
-  # ── Default to JDK 21 ─────────────────────────────────────────────────────
-  sudo archlinux-java set java-21-openjdk 2>/dev/null || true
-  ok "Default JDK set to 21."
+  # ── Install all available OpenJDK LTS from official repos ─────────────────
+  # Query pacman for every jdk*-openjdk package available, install them all
+  log "Discovering available OpenJDK LTS packages..."
+  AVAILABLE_JDKS=$(pacman -Ssq '^jdk[0-9]+-openjdk$' 2>/dev/null || true)
 
-  # ── Fish jdk() function already in config.fish (see section 1) ───────────
-  # Quick shortcut aliases in ~/.bashrc for bash fallback
+  if [[ -n "$AVAILABLE_JDKS" ]]; then
+    log "Found: $(echo "$AVAILABLE_JDKS" | tr '\n' ' ')"
+    # shellcheck disable=SC2086
+    pacin $AVAILABLE_JDKS
+  else
+    warn "Could not auto-discover JDKs — falling back to known LTS list."
+    pacin jdk8-openjdk jdk11-openjdk jdk17-openjdk jdk21-openjdk 2>/dev/null || true
+  fi
+
+  # ── Anything newer not yet in official repos → try AUR ────────────────────
+  # Check what's installed, find the highest version, try one above it from AUR
+  INSTALLED_VERSIONS=$(archlinux-java status 2>/dev/null \
+    | grep -oP 'java-\K[0-9]+' | sort -n || true)
+  HIGHEST=$(echo "$INSTALLED_VERSIONS" | tail -1)
+
+  if [[ -n "$HIGHEST" ]]; then
+    NEXT=$(( HIGHEST + 4 ))   # JDK LTS releases are every 3 years, skip by ~4
+    # Try the next likely LTS from AUR (e.g. jdk25-openjdk)
+    log "Trying AUR for jdk${NEXT}-openjdk (next LTS candidate)..."
+    aurin "jdk${NEXT}-openjdk" 2>/dev/null \
+      && ok "jdk${NEXT}-openjdk installed from AUR." \
+      || log "jdk${NEXT} not yet in AUR — you have the latest available."
+  fi
+
+  # ── Default to highest installed LTS ──────────────────────────────────────
+  LATEST_JDK=$(archlinux-java status 2>/dev/null \
+    | grep -oP 'java-\K[0-9]+-openjdk' | sort -t- -k1 -n | tail -1)
+  if [[ -n "$LATEST_JDK" ]]; then
+    sudo archlinux-java set "java-${LATEST_JDK}" 2>/dev/null || true
+    ok "Default JDK → java-${LATEST_JDK}"
+  fi
+
+  # ── Fish jdk() function already in config.fish (see section 1) ────────────
   cat >> "$HOME/.bashrc" << 'BASH'
 
 # ── JDK switcher ─────────────────────────────────────────────────────────────
 jdk() {
-  if [[ -z "$1" ]]; then
+  if [[ -z "${1:-}" ]]; then
     archlinux-java status; return
   fi
   sudo archlinux-java set "java-${1}-openjdk"
   export JAVA_HOME="/usr/lib/jvm/java-${1}-openjdk"
   java -version
 }
-# Aliases for common switches
-alias jdk8='jdk 8'  alias jdk11='jdk 11'
-alias jdk17='jdk 17' alias jdk21='jdk 21' alias jdk25='jdk 25'
 BASH
 
-  log "Usage: jdk 17        — switch to JDK 17"
-  log "       jdk            — list installed JDKs"
-  log "       archlinux-java status  — same list"
+  log "Usage: jdk 17   → switch to JDK 17"
+  log "       jdk      → list installed JDKs"
   ok "JDK setup complete."
 fi
 
@@ -472,21 +493,20 @@ fi
 if section "Dev runtime: Node (fnm) · Bun · TypeScript · Python · Git"; then
   pacin git python python-pip python-virtualenv
 
-  # fnm — fast Node version manager (already initialised in config.fish)
+  # fnm — install, bootstrap into current shell, pull latest LTS immediately
   aurin fnm-bin
-  log "Run 'fnm install --lts' after first login to install Node LTS."
+  # Bootstrap fnm into this bash session so we can use it right now
+  export FNM_DIR="$HOME/.local/share/fnm"
+  export PATH="$FNM_DIR:$PATH"
+  eval "$(fnm env --shell bash 2>/dev/null)" || true
+  fnm install --lts
+  fnm default lts-latest 2>/dev/null || fnm default "$(fnm ls | grep lts | tail -1 | awk '{print $2}')" 2>/dev/null || true
+  ok "Node $(node -v 2>/dev/null || echo '(active after re-login)') installed."
 
-  # Bun
-  aurin bun-bin
-  ok "Bun installed."
-
-  # TypeScript + common global tools
-  # (installed globally after Node is set up via fnm — can't do it now)
-  cat >> "$HOME/.config/fish/config.fish" << 'POSTNPM'
-
-# ── Global npm tools (installed after fnm sets up Node) ──────────────────────
-# Run this once: npm i -g typescript tsx pnpm prettier eslint
-POSTNPM
+  # npm globals — install now since Node is live in this shell
+  npm i -g typescript tsx pnpm prettier eslint 2>/dev/null \
+    && ok "Global npm tools installed." \
+    || warn "npm globals failed — run after re-login: npm i -g typescript tsx pnpm prettier eslint"
 
   # Git global defaults — set identity manually: git config --global user.name / user.email
   git config --global init.defaultBranch main
@@ -626,8 +646,8 @@ fi
 # ══════════════════════════════════════════════════════════════════════════════
 if section "DevOps: Lens (k8s IDE) · Minikube"; then
   aurin openlens-bin minikube
-  # kubectl is needed by both
-  pacin kubectl
+  # kubectl — use AUR bin to avoid version mismatch in official repos
+  aurin kubectl-bin
 
   # Enable minikube with Docker driver (no VMs needed)
   if ask "  Set minikube default driver to docker?"; then
@@ -789,8 +809,6 @@ echo -e "${G}  ✔  Setup complete.${D}"
 echo -e "${W}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${D}"
 echo -e ""
 echo -e "  ${C}Required after reboot:${D}"
-echo -e "    ${Y}fnm install --lts${D}              → install Node LTS"
-echo -e "    ${Y}npm i -g typescript tsx pnpm prettier eslint${D}"
 echo -e "    ${Y}sudo tailscale up${D}              → connect Tailscale"
 echo -e "    ${Y}protonup-qt${D}                   → download Proton-GE"
 echo -e "    ${Y}jetbrains-toolbox${D}              → install IDEs"
