@@ -54,6 +54,18 @@ echo -e "  ${C}Interactive — each section asks before running.${D}\n"
 ask "Begin?" || { echo "Aborted."; exit 0; }
 
 # ══════════════════════════════════════════════════════════════════════════════
+# passwordless sudo — system-wide for the wheel group
+# ══════════════════════════════════════════════════════════════════════════════
+SUDOERS_FILE="/etc/sudoers.d/nopasswd-wheel"
+if [[ ! -f "$SUDOERS_FILE" ]]; then
+  echo "%wheel ALL=(ALL) NOPASSWD: ALL" | sudo tee "$SUDOERS_FILE" >/dev/null
+  sudo chmod 440 "$SUDOERS_FILE"
+  ok "Passwordless sudo enabled for wheel group."
+else
+  ok "Passwordless sudo already set."
+fi
+
+# ══════════════════════════════════════════════════════════════════════════════
 # 0. SYSTEM UPDATE + MULTILIB + AUR HELPER
 # ══════════════════════════════════════════════════════════════════════════════
 if section "System update + multilib + paru"; then
@@ -307,12 +319,15 @@ if section "KDE defaults (dark · Windows-style · minimal)"; then
   kwriteconfig6 --file kwinrc \
     --group Compositing --key LatencyControl 0        # lower input lag
 
-  # ── Laptop: enable adaptive refresh if available ───────────────────────────
-  if ask "Apply laptop-specific tweaks (TLP, adaptive brightness)?"; then
-    pacin tlp tlp-rdw power-profiles-daemon
-    sudo systemctl enable --now tlp.service
-    sudo systemctl mask systemd-rfkill.service
-    ok "TLP enabled."
+  # ── Power profile — always on charger, set performance ─────────────────────
+  if command -v powerprofilesctl &>/dev/null; then
+    powerprofilesctl set performance
+    ok "Power profile → performance."
+  else
+    pacin power-profiles-daemon
+    sudo systemctl enable --now power-profiles-daemon
+    powerprofilesctl set performance
+    ok "power-profiles-daemon installed, profile → performance."
   fi
 
   ok "KDE configured. Changes visible after re-login."
@@ -464,15 +479,8 @@ fi
 if section "Dev runtime: Node (fnm) · Bun · TypeScript · Python · Git"; then
   pacin git python python-pip python-virtualenv
 
-  # fnm — fast Node version manager (better than nvm for fish)
+  # fnm — fast Node version manager (already initialised in config.fish)
   aurin fnm-bin
-  # Install LTS Node via fnm post-install (can't run interactively in script)
-  mkdir -p "$HOME/.config/fish/conf.d"
-  cat >> "$HOME/.config/fish/conf.d/fnm.fish" << 'FNM'
-if command -q fnm
-    fnm env --use-on-cd | source
-end
-FNM
   log "Run 'fnm install --lts' after first login to install Node LTS."
 
   # Bun
@@ -517,15 +525,17 @@ fi
 if section "Docker: Engine · Compose · Docker Desktop"; then
   pacin docker docker-compose docker-buildx
 
-  # Docker Desktop (GUI — wraps its own VM)
+  # Docker Desktop (GUI — runs its own containerd context separate from Engine)
   if ask "  Install Docker Desktop (GUI)?"; then
     aurin docker-desktop
-    warn "Docker Desktop requires KVM. Ensure virtualization is enabled in BIOS."
+    warn "Docker Desktop requires KVM — ensure virtualization is enabled in BIOS."
+    warn "Docker Desktop uses its own context. To switch: docker context use desktop-linux"
+    warn "To switch back to Engine:               docker context use default"
   fi
 
   sudo systemctl enable --now docker.service
   sudo usermod -aG docker "$USER"
-  ok "Docker enabled. Re-login for group membership."
+  ok "Docker Engine enabled. Re-login for group membership."
 fi
 
 # ══════════════════════════════════════════════════════════════════════════════
