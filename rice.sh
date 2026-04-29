@@ -54,54 +54,154 @@ paru -S --needed --noconfirm \
 ok "Base packages ready."
 
 # ══════════════════════════════════════════════════════════════════════════════
-# 2. ROSÉ PINE COLOR SCHEME
-#    Warm dark palette — base #191724, accents rose/gold/love
+# 2. ROSÉ PINE COLOR SCHEME — written directly, no download needed
+#    Palette: base #191724  surface #1f1d2e  text #e0def4  love #eb6f92
 # ══════════════════════════════════════════════════════════════════════════════
-log "Installing Rosé Pine color scheme..."
+log "Writing Rosé Pine color scheme..."
 
-# Try AUR package first, fall back to manual install
-if ! paru -S --needed --noconfirm kde-theme-rosepine-git 2>/dev/null; then
-  # Manual install from official repo
-  TMP=$(mktemp -d)
-  log "Downloading Rosé Pine KDE theme..."
-  curl -fsSL https://api.github.com/repos/rose-pine/kde/tarball/main \
-    | tar -xz -C "$TMP" --strip-components=1
+mkdir -p "$HOME/.local/share/color-schemes"
+cat > "$HOME/.local/share/color-schemes/RosePine.colors" << 'COLORS'
+[ColorEffects:Disabled]
+Color=112,110,125
+ColorAmount=0
+ColorEffect=0
+ContrastAmount=0.65
+ContrastEffect=1
+IntensityAmount=0.1
+IntensityEffect=2
 
-  mkdir -p "$HOME/.local/share/color-schemes"
-  find "$TMP" -name "*.colors" -exec cp {} "$HOME/.local/share/color-schemes/" \;
+[ColorEffects:Inactive]
+ChangeSelectionColor=true
+Color=112,110,125
+ColorAmount=0.025
+ColorEffect=2
+ContrastAmount=0.1
+ContrastEffect=2
+Enable=false
+IntensityAmount=0
+IntensityEffect=0
 
-  mkdir -p "$HOME/.local/share/aurorae/themes"
-  find "$TMP" -maxdepth 3 -type d \( -iname "*rose*pine*" -o -iname "*Rosé*" \) \
-    -exec cp -r {} "$HOME/.local/share/aurorae/themes/" \; 2>/dev/null || true
+[Colors:Button]
+BackgroundAlternate=39,37,60
+BackgroundNormal=31,29,46
+DecorationFocus=235,188,186
+DecorationHover=235,111,146
+ForegroundActive=235,188,186
+ForegroundInactive=110,106,134
+ForegroundLink=156,207,216
+ForegroundNegative=235,111,146
+ForegroundNeutral=246,193,119
+ForegroundNormal=224,222,244
+ForegroundPositive=49,116,143
+ForegroundVisited=196,167,231
 
-  rm -rf "$TMP"
-fi
-ok "Rosé Pine installed."
+[Colors:Complementary]
+BackgroundAlternate=39,37,60
+BackgroundNormal=25,23,36
+DecorationFocus=235,188,186
+DecorationHover=235,111,146
+ForegroundActive=235,188,186
+ForegroundInactive=110,106,134
+ForegroundLink=156,207,216
+ForegroundNegative=235,111,146
+ForegroundNeutral=246,193,119
+ForegroundNormal=224,222,244
+ForegroundPositive=49,116,143
+ForegroundVisited=196,167,231
 
-# ── GTK theme — Rosé Pine for Firefox, Thunderbird, etc. ─────────────────────
+[Colors:Header]
+BackgroundAlternate=31,29,46
+BackgroundNormal=25,23,36
+DecorationFocus=235,188,186
+DecorationHover=235,111,146
+ForegroundActive=235,188,186
+ForegroundInactive=110,106,134
+ForegroundLink=156,207,216
+ForegroundNegative=235,111,146
+ForegroundNeutral=246,193,119
+ForegroundNormal=224,222,244
+ForegroundPositive=49,116,143
+ForegroundVisited=196,167,231
+
+[Colors:Selection]
+BackgroundAlternate=235,111,146
+BackgroundNormal=235,111,146
+DecorationFocus=235,188,186
+DecorationHover=235,111,146
+ForegroundActive=224,222,244
+ForegroundInactive=110,106,134
+ForegroundLink=156,207,216
+ForegroundNegative=235,111,146
+ForegroundNeutral=246,193,119
+ForegroundNormal=25,23,36
+ForegroundPositive=49,116,143
+ForegroundVisited=196,167,231
+
+[Colors:Tooltip]
+BackgroundAlternate=31,29,46
+BackgroundNormal=25,23,36
+DecorationFocus=235,188,186
+DecorationHover=235,111,146
+ForegroundActive=235,188,186
+ForegroundInactive=110,106,134
+ForegroundLink=156,207,216
+ForegroundNegative=235,111,146
+ForegroundNeutral=246,193,119
+ForegroundNormal=224,222,244
+ForegroundPositive=49,116,143
+ForegroundVisited=196,167,231
+
+[Colors:View]
+BackgroundAlternate=25,23,36
+BackgroundNormal=31,29,46
+DecorationFocus=235,188,186
+DecorationHover=235,111,146
+ForegroundActive=235,188,186
+ForegroundInactive=110,106,134
+ForegroundLink=156,207,216
+ForegroundNegative=235,111,146
+ForegroundNeutral=246,193,119
+ForegroundNormal=224,222,244
+ForegroundPositive=49,116,143
+ForegroundVisited=196,167,231
+
+[Colors:Window]
+BackgroundAlternate=31,29,46
+BackgroundNormal=25,23,36
+DecorationFocus=235,188,186
+DecorationHover=235,111,146
+ForegroundActive=235,188,186
+ForegroundInactive=110,106,134
+ForegroundLink=156,207,216
+ForegroundNegative=235,111,146
+ForegroundNeutral=246,193,119
+ForegroundNormal=224,222,244
+ForegroundPositive=49,116,143
+ForegroundVisited=196,167,231
+
+[General]
+ColorScheme=RosePine
+Name=Rosé Pine
+shadeSortColumn=true
+
+[KDE]
+contrast=4
+COLORS
+
+ok "Rosé Pine color scheme written."
+
+# ── GTK theme ─────────────────────────────────────────────────────────────────
 paru -S --needed --noconfirm rose-pine-gtk-theme-full 2>/dev/null || \
-  warn "rose-pine-gtk not found in AUR — GTK apps will use Breeze Dark fallback."
+  warn "rose-pine-gtk not in AUR — GTK apps fall back to Breeze Dark."
 
 # ══════════════════════════════════════════════════════════════════════════════
 # 3. APPLY COLOR SCHEME + PLASMA THEME
 # ══════════════════════════════════════════════════════════════════════════════
-log "Applying Rosé Pine Main (dark warm)..."
+log "Applying Rosé Pine..."
 
-# Try plasma-apply-colorscheme (Plasma 6)
-SCHEME_NAME=""
-for name in "RosePineMain" "RosePine" "rose-pine" "RosePineMoon"; do
-  if plasma-apply-colorscheme "$name" 2>/dev/null; then
-    SCHEME_NAME="$name"; break
-  fi
-done
+plasma-apply-colorscheme RosePine 2>/dev/null || \
+  kwriteconfig6 --file kdeglobals --group General --key ColorScheme 'RosePine'
 
-if [[ -z "$SCHEME_NAME" ]]; then
-  warn "Could not auto-apply color scheme — set manually: System Settings → Colors"
-  warn "Look for 'Rose Pine' or 'Rosé Pine' in the list."
-fi
-
-# Plasma shell theme — closest built-in to a neutral dark floating panel
-# "Breeze Dark" plasma theme has a neutral dark panel that suits this aesthetic
 plasma-apply-desktoptheme 'Breeze Dark' 2>/dev/null || \
   kwriteconfig6 --file plasmarc --group Theme --key name 'breeze-dark'
 ok "Plasma theme set to Breeze Dark (neutral, doesn't fight the color scheme)."
