@@ -947,4 +947,4 @@ OP
 fi
 
 echo -e "  ${C}Reboot now:${D}  ${Y}sudo reboot${D}"
-echo -e ""
+echo -e ""tt
