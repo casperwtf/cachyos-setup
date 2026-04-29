@@ -84,17 +84,16 @@ if section "System update + multilib + paru"; then
 fi
 
 # ══════════════════════════════════════════════════════════════════════════════
-# 1. TERMINAL — WezTerm + Fish + Starship
+# 1. TERMINAL — Ghostty + Fish + Starship
 # ══════════════════════════════════════════════════════════════════════════════
-if section "Terminal: WezTerm · Fish · Starship"; then
-  pacin wezterm fish starship \
+if section "Terminal: Ghostty · Fish · Starship"; then
+  aurin ghostty
+  pacin fish starship \
         zoxide fzf fd ripgrep bat eza tmux
 
   # ── Fish default shell ────────────────────────────────────────────────────
-  if ask "Set fish as default shell?"; then
-    chsh -s "$(command -v fish)"
-    ok "Default shell → fish (takes effect on next login)."
-  fi
+  chsh -s "$(command -v fish)"
+  ok "Default shell → fish (takes effect on next login)."
 
   # ── Fish config ───────────────────────────────────────────────────────────
   FISH_CFG="$HOME/.config/fish/config.fish"
@@ -121,9 +120,8 @@ function jdk
         return
     end
     sudo archlinux-java set "java-$argv[1]-openjdk"
-    set -gx JAVA_HOME (archlinux-java get | xargs -I{} /usr/lib/jvm/{}/bin/java -XshowSettings:all -version 2>&1 \
-        | grep java.home | awk '{print $3}')
-    echo "Java → $(java -version 2>&1 | head -1)"
+    set -gx JAVA_HOME /usr/lib/jvm/java-$argv[1]-openjdk
+    echo "Java → "(java -version 2>&1 | head -1)
 end
 
 # ── Node version helper (uses fnm) ───────────────────────────────────────────
@@ -191,73 +189,51 @@ time_format = "%H:%M"
 STAR
   ok "Starship config written."
 
-  # ── WezTerm config ────────────────────────────────────────────────────────
-  WEZTERM_DIR="$HOME/.config/wezterm"
-  mkdir -p "$WEZTERM_DIR"
-  cat > "$WEZTERM_DIR/wezterm.lua" << 'WEZ'
-local wezterm = require 'wezterm'
-local act     = wezterm.action
-local config  = wezterm.config_builder()
+  # ── Ghostty config ────────────────────────────────────────────────────────
+  GHOSTTY_DIR="$HOME/.config/ghostty"
+  mkdir -p "$GHOSTTY_DIR"
+  cat > "$GHOSTTY_DIR/config" << 'GHOSTTY'
+# Theme — Rosé Pine (matches the KDE rice)
+theme = rose-pine
 
--- Appearance
-config.color_scheme           = 'Catppuccin Mocha'
-config.font                   = wezterm.font('JetBrainsMono Nerd Font', { weight = 'Regular' })
-config.font_size              = 12.5
-config.line_height            = 1.1
-config.freetype_load_target   = 'HorizontalLcd'
+# Font
+font-family = JetBrainsMono Nerd Font
+font-size = 13
+font-thicken = true
 
--- Window chrome — minimal
-config.window_decorations     = 'RESIZE'          -- no title bar, just border
-config.window_background_opacity = 0.97
-config.hide_tab_bar_if_only_one_tab = true
-config.use_fancy_tab_bar      = false
-config.tab_bar_at_bottom      = true
-config.tab_max_width          = 32
-config.window_padding         = { left = 12, right = 12, top = 8, bottom = 0 }
+# Window
+window-decoration = false
+window-padding-x = 12
+window-padding-y = 8
+background-opacity = 0.97
+background-blur-radius = 20
 
--- Behaviour
-config.scrollback_lines       = 10000
-config.enable_scroll_bar      = false
-config.audible_bell           = 'Disabled'
-config.default_prog           = { '/usr/bin/fish' }
+# Behaviour
+shell-integration = fish
+scrollback-limit = 10000
+copy-on-select = clipboard
+click-repeat-interval = 500
+cursor-style = bar
+cursor-style-blink = true
 
--- Colours (override tab bar to match)
-config.colors = {
-  tab_bar = {
-    background        = '#1e1e2e',
-    active_tab        = { bg_color = '#313244', fg_color = '#cdd6f4' },
-    inactive_tab      = { bg_color = '#1e1e2e', fg_color = '#585b70' },
-    inactive_tab_hover = { bg_color = '#313244', fg_color = '#cdd6f4' },
-    new_tab           = { bg_color = '#1e1e2e', fg_color = '#585b70' },
-    new_tab_hover     = { bg_color = '#313244', fg_color = '#cdd6f4' },
-  },
-}
+# Tabs — bottom, minimal
+gtk-tabs-location = bottom
+gtk-wide-tabs = false
 
--- Keybinds (Windows-Terminal-familiar)
-config.keys = {
-  { key = 't', mods = 'CTRL|SHIFT', action = act.SpawnTab 'CurrentPaneDomain' },
-  { key = 'w', mods = 'CTRL|SHIFT', action = act.CloseCurrentTab { confirm = false } },
-  { key = 'c', mods = 'CTRL|SHIFT', action = act.CopyTo 'Clipboard' },
-  { key = 'v', mods = 'CTRL|SHIFT', action = act.PasteFrom 'Clipboard' },
-  { key = 'f', mods = 'CTRL|SHIFT', action = act.Search { CaseSensitiveString = '' } },
-  { key = '+', mods = 'CTRL',       action = act.IncreaseFontSize },
-  { key = '-', mods = 'CTRL',       action = act.DecreaseFontSize },
-  { key = '0', mods = 'CTRL',       action = act.ResetFontSize },
-  -- Split panes
-  { key = 'd', mods = 'CTRL|SHIFT', action = act.SplitHorizontal { domain = 'CurrentPaneDomain' } },
-  { key = 'e', mods = 'CTRL|SHIFT', action = act.SplitVertical   { domain = 'CurrentPaneDomain' } },
-  { key = 'LeftArrow',  mods = 'CTRL|SHIFT', action = act.ActivatePaneDirection 'Left' },
-  { key = 'RightArrow', mods = 'CTRL|SHIFT', action = act.ActivatePaneDirection 'Right' },
-}
-
-config.mouse_bindings = {
-  { event = { Up = { streak = 1, button = 'Right' } },
-    mods  = 'NONE', action = act.PasteFrom 'PrimarySelection' },
-}
-
-return config
-WEZ
-  ok "WezTerm config written."
+# Keybinds — Windows Terminal-familiar
+keybind = ctrl+shift+t=new_tab
+keybind = ctrl+shift+w=close_surface
+keybind = ctrl+shift+c=copy_to_clipboard
+keybind = ctrl+shift+v=paste_from_clipboard
+keybind = ctrl+equal=increase_font_size:1
+keybind = ctrl+minus=decrease_font_size:1
+keybind = ctrl+zero=reset_font_size
+keybind = ctrl+shift+d=new_split:right
+keybind = ctrl+shift+e=new_split:down
+keybind = ctrl+shift+left_bracket=goto_split:previous
+keybind = ctrl+shift+right_bracket=goto_split:next
+GHOSTTY
+  ok "Ghostty config written."
 fi
 
 # ══════════════════════════════════════════════════════════════════════════════

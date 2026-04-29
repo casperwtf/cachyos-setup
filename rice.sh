@@ -63,18 +63,15 @@ log "Installing Rosé Pine color scheme..."
 if ! paru -S --needed --noconfirm kde-theme-rosepine-git 2>/dev/null; then
   # Manual install from official repo
   TMP=$(mktemp -d)
-  git clone --depth 1 https://github.com/rose-pine/kde "$TMP/rose-pine-kde"
+  log "Downloading Rosé Pine KDE theme..."
+  curl -fsSL https://api.github.com/repos/rose-pine/kde/tarball/main \
+    | tar -xz -C "$TMP" --strip-components=1
 
-  # Copy color schemes
   mkdir -p "$HOME/.local/share/color-schemes"
-  find "$TMP/rose-pine-kde" -name "*.colors" -exec cp {} \
-    "$HOME/.local/share/color-schemes/" \;
+  find "$TMP" -name "*.colors" -exec cp {} "$HOME/.local/share/color-schemes/" \;
 
-  # Copy aurorae window decoration themes
   mkdir -p "$HOME/.local/share/aurorae/themes"
-  find "$TMP/rose-pine-kde" -maxdepth 2 -type d -name "*rose*pine*" \
-    -exec cp -r {} "$HOME/.local/share/aurorae/themes/" \; 2>/dev/null || true
-  find "$TMP/rose-pine-kde" -maxdepth 2 -type d -name "*Rosé*" \
+  find "$TMP" -maxdepth 3 -type d \( -iname "*rose*pine*" -o -iname "*Rosé*" \) \
     -exec cp -r {} "$HOME/.local/share/aurorae/themes/" \; 2>/dev/null || true
 
   rm -rf "$TMP"
@@ -494,18 +491,17 @@ else
 fi
 
 # ══════════════════════════════════════════════════════════════════════════════
-# 13. WEZTERM UPDATE — warm Rosé Pine colorscheme
+# 13. GHOSTTY — update theme to Rosé Pine
 # ══════════════════════════════════════════════════════════════════════════════
-log "Updating WezTerm colors to Rosé Pine..."
+log "Updating Ghostty theme to Rosé Pine..."
 
-WEZTERM_CFG="$HOME/.config/wezterm/wezterm.lua"
-if [[ -f "$WEZTERM_CFG" ]]; then
-  # Swap color scheme line in existing config
-  sed -i "s/color_scheme.*=.*/color_scheme = 'rose-pine',/" "$WEZTERM_CFG" && \
-    ok "WezTerm colorscheme → Rosé Pine" || \
-    warn "Could not auto-update WezTerm config. Set color_scheme = 'rose-pine' manually."
+GHOSTTY_CFG="$HOME/.config/ghostty/config"
+if [[ -f "$GHOSTTY_CFG" ]]; then
+  sed -i 's/^theme =.*/theme = rose-pine/' "$GHOSTTY_CFG" && \
+    ok "Ghostty theme → rose-pine" || \
+    warn "Could not update Ghostty config — set 'theme = rose-pine' manually."
 else
-  warn "WezTerm config not found — run main setup script first."
+  warn "Ghostty config not found — run setup.sh first."
 fi
 
 # ══════════════════════════════════════════════════════════════════════════════
