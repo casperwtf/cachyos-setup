@@ -771,14 +771,7 @@ EOF'
   fi
 
   # Firewall — minimal UFW
-  if ask "  Enable UFW firewall (deny in / allow out)?"; then
-    pacin ufw
-    sudo ufw default deny incoming
-    sudo ufw default allow outgoing
-    sudo ufw enable
-    sudo systemctl enable ufw
-    ok "UFW enabled."
-  fi
+  ok "System tweaks applied."
 fi
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -947,4 +940,4 @@ OP
 fi
 
 echo -e "  ${C}Reboot now:${D}  ${Y}sudo reboot${D}"
-echo -e ""tt
+echo -e ""
