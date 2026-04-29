@@ -26,7 +26,7 @@ log()  { echo -e "${C}→${D} $*"; }
 ok()   { echo -e "${G}✔${D} $*"; }
 warn() { echo -e "${Y}⚠${D}  $*"; }
 die()  { echo -e "${R}✖${D} $*" >&2; exit 1; }
-ask()  { printf "  ${Y}?${D} %-52s [Y/n] " "$*"; local r; read -r r; [[ "${r:-y}" =~ ^[Yy]$ ]]; }
+ask()  { return 0; }   # always yes — runs unattended
 
 [[ $EUID -eq 0 ]]                      && die "Run as normal user."
 command -v paru &>/dev/null            || die "paru not found — run main setup script first."
@@ -513,16 +513,13 @@ fi
 # ══════════════════════════════════════════════════════════════════════════════
 qdbus6 org.kde.KWin /KWin reconfigure 2>/dev/null || true
 
-if ask "Restart plasmashell now to apply panel changes?"; then
-  kquitapp6 plasmashell 2>/dev/null || killall plasmashell 2>/dev/null || true
-  sleep 1
-  nohup plasmashell --replace &>/dev/null &
-  disown
-  sleep 3
-  ok "plasmashell restarted."
-else
-  warn "Log out and back in to apply panel changes."
-fi
+log "Restarting plasmashell..."
+kquitapp6 plasmashell 2>/dev/null || killall plasmashell 2>/dev/null || true
+sleep 1
+nohup plasmashell --replace &>/dev/null &
+disown
+sleep 3
+ok "plasmashell restarted."
 
 # ══════════════════════════════════════════════════════════════════════════════
 echo -e "\n${W}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${D}"

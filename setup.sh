@@ -18,19 +18,12 @@ warn() { echo -e "${Y}⚠${D}  $*"; }
 die()  { echo -e "${R}✖ ${D}$*" >&2; exit 1; }
 skip() { echo -e "${W}–${D} skip: $*"; }
 
-ask() {
-  local q="$1" def="${2:-y}"
-  local h; [[ $def == y ]] && h="${G}Y${D}/n" || h="y/${G}N${D}"
-  printf "  ${Y}?${D} %-52s [%b] " "$q" "$h"
-  local r; read -r r; r="${r:-$def}"
-  [[ $r =~ ^[Yy]$ ]]
-}
-
 section() {
   echo -e "\n${W}━━━  $*  ━━━${D}"
-  ask "Run?" || { skip "$*"; return 1; }
   return 0
 }
+
+ask() { return 0; }   # always yes — script runs unattended
 
 pacin()  { sudo pacman -S --needed --noconfirm "$@" 2>/dev/null; }
 aurin()  { paru  -S --needed --noconfirm "$@" 2>/dev/null || warn "AUR miss: $*"; }
@@ -51,7 +44,7 @@ cat << 'BANNER'
 BANNER
 echo -e "${D}"
 echo -e "  ${C}Interactive — each section asks before running.${D}\n"
-ask "Begin?" || { echo "Aborted."; exit 0; }
+echo -e "  ${C}Running unattended — git identity skipped, set manually after.${D}\n"
 
 # ══════════════════════════════════════════════════════════════════════════════
 # passwordless sudo — system-wide for the wheel group
@@ -495,26 +488,19 @@ if section "Dev runtime: Node (fnm) · Bun · TypeScript · Python · Git"; then
 # Run this once: npm i -g typescript tsx pnpm prettier eslint
 POSTNPM
 
-  # Git global setup
-  if ask "Configure global git identity?"; then
-    printf "  Name:  "; read -r GN
-    printf "  Email: "; read -r GE
-    git config --global user.name  "$GN"
-    git config --global user.email "$GE"
-    git config --global init.defaultBranch main
-    git config --global pull.rebase false
-    git config --global core.autocrlf input   # sane CRLF for cross-platform teams
-    git config --global push.autoSetupRemote true
-    git config --global rerere.enabled true   # remember conflict resolutions
-    git config --global fetch.prune true
-    ok "Git configured for $GN <$GE>"
-  fi
+  # Git global defaults — set identity manually: git config --global user.name / user.email
+  git config --global init.defaultBranch main
+  git config --global pull.rebase false
+  git config --global core.autocrlf input
+  git config --global push.autoSetupRemote true
+  git config --global rerere.enabled true
+  git config --global fetch.prune true
+  warn "Git identity not set — run after install:"
+  warn "  git config --global user.name  'Your Name'"
+  warn "  git config --global user.email 'you@example.com'"
 
-  # GitHub CLI
-  if ask "Install GitHub CLI (gh)?"; then
-    pacin github-cli
-    if ask "  Authenticate now?"; then gh auth login; fi
-  fi
+  # GitHub CLI — installed, auth done manually with: gh auth login
+  pacin github-cli
 
   ok "Dev runtimes installed."
 fi
