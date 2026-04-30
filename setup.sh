@@ -258,43 +258,88 @@ pacin \
   cpupower brightnessctl power-profiles-daemon
 ok "pacman batch done."
 
-# ── AUR — one call ────────────────────────────────────────────────────────────
-log "AUR batch..."
-aurin \
-  `# terminal` \
-  `# fonts` \
-  ttf-ms-win11-auto \
-  `# KDE theme` \
-  catppuccin-kde-git papirus-icon-theme bibata-cursor-theme klassy-bin \
-  `# browsers` \
-  vivaldi vivaldi-ffmpeg-codecs librewolf-bin ungoogled-chromium-bin tor-browser \
-  `# comms` \
-  discord-canary slack-desktop rocketchat-desktop \
-  `# editors` \
-  zed visual-studio-code-bin jetbrains-toolbox \
-  `# dev` \
-  fnm-bin bun-bin \
-  `# docker` \
-  docker-desktop \
-  `# db clients` \
-  mongodb-compass dbeaver-ce \
-  `# redis/nats` \
-  redisinsight-bin nats-server natscli \
-  `# gaming` \
-  prismlauncher protonup-qt \
-  `# vpn` \
-  mullvad-vpn-bin \
-  `# devops` \
-  openlens-bin minikube kubectl-bin \
-  `# productivity` \
-  1password gitbutler-bin linear-app spotify \
-  `# dev tools` \
-  yourkit blockbench-bin bruno-bin \
-  `# flatpak` \
-  flatpak \
-  `# keyboard RGB` \
-  openrgb
-ok "AUR batch done."
+# ── AUR — install individually so one failure doesn't kill the rest ───────────
+log "AUR packages (individual installs)..."
+
+_aur() {
+  local pkg="$1"
+  if paru -S --needed --noconfirm "$pkg" &>/dev/null; then
+    ok "  $pkg"
+  else
+    warn "  $pkg — failed or skipped"
+  fi
+}
+
+# fonts
+_aur ttf-ms-win11-auto
+
+# KDE theme
+_aur catppuccin-kde-git
+_aur papirus-icon-theme
+_aur bibata-cursor-theme
+_aur klassy-bin
+
+# browsers
+_aur vivaldi
+_aur vivaldi-ffmpeg-codecs
+_aur librewolf-bin
+_aur ungoogled-chromium-bin
+_aur tor-browser
+
+# comms
+_aur discord-canary
+_aur slack-desktop
+_aur rocketchat-desktop
+
+# editors
+_aur zed
+_aur visual-studio-code-bin
+_aur jetbrains-toolbox
+
+# dev
+_aur fnm-bin
+_aur bun-bin
+
+# docker
+_aur docker-desktop
+
+# db
+_aur mongodb-compass
+_aur dbeaver-ce
+
+# redis/nats
+_aur redisinsight-bin
+_aur nats-server
+_aur natscli
+
+# gaming
+_aur prismlauncher
+_aur protonup-qt
+
+# vpn
+_aur mullvad-vpn-bin
+
+# devops
+_aur openlens-bin
+_aur minikube
+_aur kubectl-bin
+
+# productivity
+_aur 1password
+_aur gitbutler-bin
+_aur linear-app
+_aur spotify
+
+# dev tools
+_aur yourkit
+_aur blockbench-bin
+_aur bruno-bin
+
+# system
+_aur flatpak
+_aur openrgb
+
+ok "AUR installs done."
 
 # ══════════════════════════════════════════════════════════════════════════════
 # PHASE 3 — config · services · file writes  (all backgrounded, run in parallel)
@@ -395,11 +440,12 @@ VSJSON
 
 # ── Docker ────────────────────────────────────────────────────────────────────
 _cfg_docker() {
-  sudo systemctl enable --now docker.service
+  sudo systemctl enable docker.service docker.socket
+  # Don't --now on fresh install — docker.socket starts it on first use
   sudo usermod -aG docker "$USER"
   warn "Docker Desktop uses its own context: docker context use desktop-linux"
   warn "Back to Engine:                       docker context use default"
-  ok "Docker: engine enabled."
+  ok "Docker: engine enabled (starts on first use via socket)."
 }
 
 # ── NATS systemd unit ─────────────────────────────────────────────────────────
@@ -437,11 +483,11 @@ _cfg_gaming() {
 
 # ── VPN/net ───────────────────────────────────────────────────────────────────
 _cfg_vpn() {
-  sudo systemctl enable mullvad-daemon.service
-  sudo systemctl enable tailscaled.service
+  command -v mullvad     &>/dev/null && sudo systemctl enable mullvad-daemon.service  || warn "mullvad not installed yet — skipping daemon enable"
+  command -v tailscale   &>/dev/null && sudo systemctl enable tailscaled.service      || warn "tailscale not installed yet — skipping daemon enable"
   sudo usermod -aG wireshark "$USER"
   sudo setcap cap_net_raw,cap_net_admin=eip /usr/bin/dumpcap 2>/dev/null || true
-  ok "VPN: Mullvad + Tailscale enabled (start after login)."
+  ok "VPN: configured (daemons start on next boot after install)."
 }
 
 # ── Minikube ──────────────────────────────────────────────────────────────────
@@ -621,10 +667,8 @@ ACTION=="add", SUBSYSTEM=="leds", KERNEL=="*kbd*", \
 UDEV
   fi
 
-  # OpenRGB — enable udev rules for non-root access
+  # OpenRGB — udev rules for non-root access (configure RGB manually after install)
   if command -v openrgb &>/dev/null; then
-    sudo openrgb --startminimized 2>/dev/null || true
-    # udev rules ship with openrgb — just reload
     sudo udevadm control --reload-rules 2>/dev/null || true
   fi
 
@@ -717,6 +761,10 @@ npm i -g typescript tsx pnpm prettier eslint 2>/dev/null \
   || warn "npm globals failed — run after relogin: npm i -g typescript tsx pnpm prettier eslint"
 
 ok "Phase 4 done."
+
+# Enable VPN daemons here — guaranteed packages are installed by now
+command -v mullvad   &>/dev/null && sudo systemctl enable mullvad-daemon.service  2>/dev/null && ok "Mullvad daemon enabled." || true
+command -v tailscale &>/dev/null && sudo systemctl enable tailscaled.service      2>/dev/null && ok "Tailscale daemon enabled." || true
 
 # ══════════════════════════════════════════════════════════════════════════════
 # DONE
