@@ -16,12 +16,14 @@ pi() { sudo pacman -S --needed --noconfirm "$@" 2>&1 | grep -v 'up to date' || t
 
 aur() {
   local pkg="$1"
-  if paru -Q "$pkg" &>/dev/null; then return 0; fi
-  if timeout 300 paru -S --needed --noconfirm --nopgpfetch --skipreview "$pkg" \
-      </dev/null &>/dev/null; then
+  paru -Q "$pkg" &>/dev/null && return 0
+  # env vars stop git/gpg/editor/pager subprocesses from prompting
+  if GIT_TERMINAL_PROMPT=0 PAGER=cat LESS= EDITOR=true \
+      timeout 300 paru -S --needed --noconfirm --nopgpfetch --skipreview \
+      "$pkg" </dev/null &>/dev/null; then
     ok "  $pkg"
   else
-    warn "  $pkg — skipped (failed, conflict, or timed out)"
+    warn "  $pkg — skipped"
   fi
 }
 
@@ -73,6 +75,17 @@ if ! command -v paru &>/dev/null; then
   rm -rf "$T"
   ok "paru installed"
 fi
+
+# write paru config — fully non-interactive
+mkdir -p "$HOME/.config/paru"
+cat > "$HOME/.config/paru/paru.conf" << 'PARU_CONF'
+[options]
+SkipReview
+NewsOnUpgrade = false
+RemoveMake
+CleanAfter
+PARU_CONF
+ok "paru configured (non-interactive)"
 
 h "pacman packages"
 
