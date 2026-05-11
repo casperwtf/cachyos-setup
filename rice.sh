@@ -446,10 +446,7 @@ fi
 
 log "dock: ${#LAUNCHERS[@]} apps found"
 
-# ── appletsrc ─────────────────────────────────────────────────────────────────
-# location enum in Plasma 6 config files:
-#   0=Floating  1=Desktop  2=FullScreen
-#   3=TopEdge   4=BottomEdge  5=LeftEdge  6=RightEdge
+# ── appletsrc — single panel, icons left, clock center, tray right ───────────
 cat > "$APPLETSRC" << APLRC
 [ActionPlugins][0]
 RightButton;NoModifier=org.kde.contextmenu
@@ -489,56 +486,46 @@ showRecentApps=false
 
 [Containments][2][Applets][11]
 immutability=1
-plugin=org.kde.plasma.panelspacer
+plugin=org.kde.plasma.icontasks
+
+[Containments][2][Applets][11][Configuration][General]
+launchers=${LAUNCHER_STR}
+showOnlyCurrentScreen=false
+showOnlyCurrentDesktop=false
+showOnlyCurrentActivity=true
 
 [Containments][2][Applets][12]
 immutability=1
+plugin=org.kde.plasma.panelspacer
+
+[Containments][2][Applets][13]
+immutability=1
 plugin=org.kde.plasma.digitalclock
 
-[Containments][2][Applets][12][Configuration][Appearance]
+[Containments][2][Applets][13][Configuration][Appearance]
 showDate=true
 showSeconds=Never
 use24hFormat=2
 dateFormat=isoDate
 fontStyleName=Regular
 
-[Containments][2][Applets][13]
+[Containments][2][Applets][14]
 immutability=1
 plugin=org.kde.plasma.panelspacer
 
-[Containments][2][Applets][14]
+[Containments][2][Applets][15]
 immutability=1
 plugin=org.kde.plasma.systemtray
 
-[Containments][2][Applets][14][Configuration][General]
+[Containments][2][Applets][15][Configuration][General]
 shownItems=org.kde.plasma.networkmanagement,org.kde.plasma.volume,org.kde.plasma.battery
 extraItems=org.kde.plasma.bluetooth
 
 [Containments][2][Configuration]
 PreloadWeight=100
-
-[Containments][3]
-activityId=
-formfactor=2
-immutability=1
-lastScreen=0
-location=3
-plugin=org.kde.panel
-wallpaperplugin=org.kde.image
-
-[Containments][3][Applets][20]
-immutability=1
-plugin=org.kde.plasma.icontasks
-
-[Containments][3][Applets][20][Configuration][General]
-launchers=${LAUNCHER_STR}
-iconSpacing=1
-
-[Containments][3][Configuration]
-PreloadWeight=100
 APLRC
 
-# ── plasmashellrc ─────────────────────────────────────────────────────────────
+# ── plasmashellrc — single panel, thin, full-width ────────────────────────────
 python3 - << PYEOF
 import os
 
@@ -549,31 +536,21 @@ if os.path.exists(path):
     with open(path) as f:
         skip = False
         for line in f:
-            in_our_panel = '[PlasmaViews][Panel 2]' in line or '[PlasmaViews][Panel 3]' in line
-            if in_our_panel:
+            if any(x in line for x in ['[PlasmaViews][Panel 2]', '[PlasmaViews][Panel 3]']):
                 skip = True
-            elif line.startswith('[') and skip and not in_our_panel:
+            elif line.startswith('[') and skip:
                 skip = False
             if not skip:
                 lines.append(line)
 
-# top bar — thin, full-width, flush to top edge
 lines.append('\n[PlasmaViews][Panel 2][Defaults]\n')
 lines.append('floating=0\n')
 lines.append('panelLengthMode=1\n')
 lines.append('panelVisibility=0\n')
-lines.append('thickness=28\n')
-
-# bottom dock — floating pill, centered, fit to content, auto-hide
-lines.append('\n[PlasmaViews][Panel 3][Defaults]\n')
-lines.append('floating=1\n')
-lines.append('panelLengthMode=0\n')
-lines.append('panelVisibility=1\n')
-lines.append('thickness=60\n')
+lines.append('thickness=36\n')
 
 with open(path, 'w') as f:
     f.writelines(lines)
-
 print('plasmashellrc written')
 PYEOF
 
