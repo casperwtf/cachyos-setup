@@ -16,15 +16,14 @@ pi() { sudo pacman -S --needed --noconfirm "$@" 2>&1 | grep -v 'up to date' || t
 
 aur() {
   local pkg="$1"
-  paru -Q "$pkg" &>/dev/null && return 0
-  # env vars stop git/gpg/editor/pager subprocesses from prompting
-  if GIT_TERMINAL_PROMPT=0 PAGER=cat LESS= EDITOR=true \
-      timeout 300 paru -S --needed --noconfirm --nopgpfetch --skipreview \
-      "$pkg" </dev/null &>/dev/null; then
-    ok "  $pkg"
-  else
-    warn "  $pkg — skipped"
-  fi
+  # pacman -Q not paru -Q — avoids paru initialization on every check
+  pacman -Q "$pkg" &>/dev/null && return 0
+  log "  $pkg"
+  GIT_TERMINAL_PROMPT=0 PAGER=cat LESS= EDITOR=true BAT_PAGER=cat \
+    timeout 300 paru -S --needed --noconfirm --nopgpfetch --skipreview \
+    "$pkg" </dev/null &>/dev/null \
+    && ok "  $pkg" \
+    || warn "  $pkg — skipped"
 }
 
 svc_enable() {
@@ -108,6 +107,19 @@ pi \
 ok "pacman done"
 
 h "AUR packages"
+
+# write paru config to be fully non-interactive
+mkdir -p "$HOME/.config/paru"
+cat > "$HOME/.config/paru/paru.conf" << 'PCONF'
+[options]
+SkipReview
+NewsOnUpgrade = false
+RemoveMake
+CleanAfter
+PCONF
+
+# release any pacman db lock left from the -Syu above
+sudo rm -f /var/lib/pacman/db.lck 2>/dev/null || true
 
 aur ttf-ms-win11-auto
 aur catppuccin-kde-git
@@ -531,7 +543,7 @@ HIGHEST=$(archlinux-java status 2>/dev/null \
   | grep -oP 'java-\K[0-9]+(?=-openjdk)' | sort -n | uniq | tail -1 || true)
 if [[ -n "$HIGHEST" ]]; then
   NEXT=$(( HIGHEST + 4 ))
-  if ! paru -Q "jdk${NEXT}-openjdk" &>/dev/null; then
+  if ! pacman -Q "jdk${NEXT}-openjdk" &>/dev/null; then
     paru -S --needed --noconfirm "jdk${NEXT}-openjdk" &>/dev/null \
       && ok "jdk${NEXT} installed from AUR" \
       || log "jdk${NEXT} not in AUR yet"
