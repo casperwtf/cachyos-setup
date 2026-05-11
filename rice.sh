@@ -651,8 +651,24 @@ ok "Ghostty theme written"
 h "reload"
 # ══════════════════════════════════════════════════════════════════════════════
 
-qdbus6 org.kde.KWin /KWin reconfigure 2>/dev/null || true
+# verify klassy installed — fall back to Breeze if missing
+if ! pacman -Q klassy-bin &>/dev/null && ! pacman -Q klassy &>/dev/null; then
+  warn "Klassy not installed — falling back to Breeze decorations"
+  kw6 --file kwinrc --group org.kde.kdecoration2 --key library 'org.kde.breeze'
+  kw6 --file kwinrc --group org.kde.kdecoration2 --key theme   'Breeze'
+fi
 
+# restart KWin — reconfigure alone doesn't reload decoration plugins
+log "restarting KWin..."
+if [[ "${XDG_SESSION_TYPE:-}" == "wayland" ]]; then
+  nohup kwin_wayland --replace &>/dev/null & disown 2>/dev/null
+else
+  nohup kwin_x11 --replace &>/dev/null & disown 2>/dev/null
+fi
+sleep 2
+ok "KWin restarted"
+
+# restart plasmashell — picks up panel + color scheme changes
 log "restarting plasmashell..."
 kquitapp6 plasmashell 2>/dev/null || killall plasmashell 2>/dev/null || true
 sleep 1
