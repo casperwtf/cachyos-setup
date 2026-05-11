@@ -17,10 +17,11 @@ pi() { sudo pacman -S --needed --noconfirm "$@" 2>&1 | grep -v 'up to date' || t
 aur() {
   local pkg="$1"
   if paru -Q "$pkg" &>/dev/null; then return 0; fi
-  if paru -S --needed --noconfirm "$pkg" &>/dev/null; then
+  if timeout 300 paru -S --needed --noconfirm --nopgpfetch --skipreview "$pkg" \
+      </dev/null &>/dev/null; then
     ok "  $pkg"
   else
-    warn "  $pkg — skipped"
+    warn "  $pkg — skipped (failed, conflict, or timed out)"
   fi
 }
 
