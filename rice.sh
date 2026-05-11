@@ -375,28 +375,32 @@ ok "KDE settings applied"
 h "panels — top bar + bottom dock"
 # ══════════════════════════════════════════════════════════════════════════════
 
+# suspend exit-on-error for the panel section — config failures shouldn't
+# abort the whole rice; panels can be fixed manually
+set +e
+
 APPLETSRC="$HOME/.config/plasma-org.kde.plasma.desktop-appletsrc"
 SHELLRC="$HOME/.config/plasmashellrc"
 
 [[ -f "$APPLETSRC" ]] && cp "$APPLETSRC" "${APPLETSRC}.bak"
 [[ -f "$SHELLRC"   ]] && cp "$SHELLRC"   "${SHELLRC}.bak"
 
-# extract current desktop activity id so we don't break it
-ACTIVITY_ID=$(python3 - "$APPLETSRC" 2>/dev/null << 'PY'
+# preserve current desktop activity id
+ACTIVITY_ID=$(python3 -c "
 import configparser, sys, os
-if not os.path.exists(sys.argv[1]): print(''); exit()
-cfg = configparser.RawConfigParser(); cfg.read(sys.argv[1])
+path = '${APPLETSRC}'
+if not os.path.exists(path): print(''); exit()
+cfg = configparser.RawConfigParser()
+cfg.read(path)
 for s in cfg.sections():
     if cfg.has_option(s,'plugin') and cfg.get(s,'plugin')=='org.kde.desktopcontainment':
         print(cfg.get(s,'activityId',fallback='')); exit()
-PY
-)
+" 2>/dev/null || echo '')
 ACTIVITY_ID="${ACTIVITY_ID:-00000000-0000-0000-0000-000000000000}"
 
-# ── discover .desktop files for dock ─────────────────────────────────────────
+# ── discover installed .desktop files for dock ────────────────────────────────
 _find_desktop() {
-  local candidates=("$@")
-  for c in "${candidates[@]}"; do
+  for c in "$@"; do
     for d in "$HOME/.local/share/applications" /usr/share/applications /usr/local/share/applications; do
       [[ -f "$d/$c" ]] && echo "applications:$c" && return
     done
@@ -404,7 +408,7 @@ _find_desktop() {
 }
 
 LAUNCHERS=()
-_add() { local r; r=$(_find_desktop "$@"); [[ -n "$r" ]] && LAUNCHERS+=("$r"); }
+_add() { local r; r=$(_find_desktop "$@") && [[ -n "$r" ]] && LAUNCHERS+=("$r") || true; }
 
 _add com.mitchellh.ghostty.desktop ghostty.desktop
 _add vivaldi-stable.desktop vivaldi.desktop
@@ -433,13 +437,19 @@ _add bruno.desktop
 _add com.obsproject.Studio.desktop obs.desktop
 _add org.kde.dolphin.desktop dolphin.desktop
 
-LAUNCHER_STR=$(IFS=','; echo "${LAUNCHERS[*]}")
-log "dock: found ${#LAUNCHERS[@]} apps"
+# safe join — handles empty array without nounset error
+LAUNCHER_STR=""
+if [[ ${#LAUNCHERS[@]} -gt 0 ]]; then
+  LAUNCHER_STR=$(printf '%s,' "${LAUNCHERS[@]}")
+  LAUNCHER_STR="${LAUNCHER_STR%,}"  # strip trailing comma
+fi
 
-# ── write appletsrc ────────────────────────────────────────────────────────────
-# containment 1 = desktop
-# containment 2 = top bar  (thin, full-width, dark)
-# containment 3 = bottom dock (floating, fit-content, icons only)
+log "dock: ${#LAUNCHERS[@]} apps found"
+
+# ── appletsrc ─────────────────────────────────────────────────────────────────
+# location enum in Plasma 6 config files:
+#   0=Floating  1=Desktop  2=FullScreen
+#   3=TopEdge   4=BottomEdge  5=LeftEdge  6=RightEdge
 cat > "$APPLETSRC" << APLRC
 [ActionPlugins][0]
 RightButton;NoModifier=org.kde.contextmenu
@@ -461,7 +471,7 @@ activityId=
 formfactor=2
 immutability=1
 lastScreen=0
-location=2
+location=3
 plugin=org.kde.panel
 wallpaperplugin=org.kde.image
 
@@ -522,49 +532,53 @@ plugin=org.kde.plasma.icontasks
 
 [Containments][3][Applets][20][Configuration][General]
 launchers=${LAUNCHER_STR}
+iconSpacing=1
 
 [Containments][3][Configuration]
 PreloadWeight=100
 APLRC
 
-# ── write plasmashellrc ────────────────────────────────────────────────────────
-python3 - "$SHELLRC" << 'PY'
-import os, sys
+# ── plasmashellrc ─────────────────────────────────────────────────────────────
+python3 - << PYEOF
+import os
 
-path = sys.argv[1]
+path = os.path.expanduser('$SHELLRC')
 lines = []
 
 if os.path.exists(path):
     with open(path) as f:
         skip = False
         for line in f:
-            if '[PlasmaViews][Panel 2]' in line or '[PlasmaViews][Panel 3]' in line:
+            in_our_panel = '[PlasmaViews][Panel 2]' in line or '[PlasmaViews][Panel 3]' in line
+            if in_our_panel:
                 skip = True
-            elif line.startswith('[') and skip:
-                if '[PlasmaViews][Panel 2]' not in line and '[PlasmaViews][Panel 3]' not in line:
-                    skip = False
+            elif line.startswith('[') and skip and not in_our_panel:
+                skip = False
             if not skip:
                 lines.append(line)
 
-# top bar — thin, full-width, attached to top edge
+# top bar — thin, full-width, flush to top edge
 lines.append('\n[PlasmaViews][Panel 2][Defaults]\n')
 lines.append('floating=0\n')
 lines.append('panelLengthMode=1\n')
 lines.append('panelVisibility=0\n')
 lines.append('thickness=28\n')
 
-# bottom dock — floating pill, fit to content, icons only
+# bottom dock — floating pill, centered, fit to content
 lines.append('\n[PlasmaViews][Panel 3][Defaults]\n')
 lines.append('floating=1\n')
 lines.append('panelLengthMode=0\n')
 lines.append('panelVisibility=0\n')
-lines.append('thickness=56\n')
+lines.append('thickness=60\n')
 
 with open(path, 'w') as f:
     f.writelines(lines)
-PY
+
+print('plasmashellrc written')
+PYEOF
 
 ok "panels configured"
+set -e
 
 # ══════════════════════════════════════════════════════════════════════════════
 h "wallpapers"
