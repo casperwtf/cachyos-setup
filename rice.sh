@@ -522,7 +522,7 @@ activityId=
 formfactor=2
 immutability=1
 lastScreen=0
-location=4
+location=3
 plugin=org.kde.panel
 wallpaperplugin=org.kde.image
 
@@ -564,11 +564,11 @@ lines.append('panelLengthMode=1\n')
 lines.append('panelVisibility=0\n')
 lines.append('thickness=28\n')
 
-# bottom dock — floating pill, centered, fit to content
+# bottom dock — floating pill, centered, fit to content, auto-hide
 lines.append('\n[PlasmaViews][Panel 3][Defaults]\n')
 lines.append('floating=1\n')
 lines.append('panelLengthMode=0\n')
-lines.append('panelVisibility=0\n')
+lines.append('panelVisibility=1\n')
 lines.append('thickness=60\n')
 
 with open(path, 'w') as f:

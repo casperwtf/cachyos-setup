@@ -47,6 +47,15 @@ cat << 'EOF'
 EOF
 echo -e "${D}"
 
+# ── detect desktop vs laptop ──────────────────────────────────────────────────
+IS_LAPTOP=false
+if ls /sys/class/power_supply/BAT* &>/dev/null; then
+  IS_LAPTOP=true
+  log "laptop detected — battery management will be configured"
+else
+  log "desktop detected"
+fi
+
 h "sudo · multilib · paru"
 
 SUDOERS="/etc/sudoers.d/nopasswd-wheel"
@@ -406,6 +415,31 @@ if command -v minikube &>/dev/null; then
   ok "minikube driver → docker"
 fi
 
+# default browser — vivaldi
+if command -v vivaldi-stable &>/dev/null || command -v vivaldi &>/dev/null; then
+  VIVALDI_DESKTOP="vivaldi-stable.desktop"
+  [[ -f /usr/share/applications/vivaldi.desktop ]] && VIVALDI_DESKTOP="vivaldi.desktop"
+  xdg-settings set default-web-browser "$VIVALDI_DESKTOP" 2>/dev/null || true
+  # also write mimeapps.list directly for KDE
+  mkdir -p "$HOME/.config"
+  MIMEAPPS="$HOME/.config/mimeapps.list"
+  # remove existing browser entries then add vivaldi
+  if [[ -f "$MIMEAPPS" ]]; then
+    sed -i '/x-scheme-handler\/http/d;/x-scheme-handler\/https/d;/x-scheme-handler\/ftp/d;/text\/html/d;/application\/xhtml/d' "$MIMEAPPS"
+  fi
+  cat >> "$MIMEAPPS" << EOF
+[Default Applications]
+x-scheme-handler/http=$VIVALDI_DESKTOP
+x-scheme-handler/https=$VIVALDI_DESKTOP
+x-scheme-handler/ftp=$VIVALDI_DESKTOP
+text/html=$VIVALDI_DESKTOP
+application/xhtml+xml=$VIVALDI_DESKTOP
+EOF
+  ok "default browser → Vivaldi"
+else
+  warn "Vivaldi not installed yet — set default browser manually after install"
+fi
+
 if command -v nats-server &>/dev/null; then
   mkdir -p "$HOME/.config/systemd/user"
   cat > "$HOME/.config/systemd/user/nats-dev.service" << 'NATS'
@@ -506,6 +540,64 @@ suspendType=0
 idleTime=0
 suspendType=0
 POWER
+
+# ── laptop-specific settings ─────────────────────────────────────────────────
+if $IS_LAPTOP; then
+  # 80% charge cap — protects battery when always plugged in
+  # writes to sysfs threshold supported by most modern laptop firmware
+  _set_charge_limit() {
+    local limit="$1"
+    local set=false
+    for bat in /sys/class/power_supply/BAT*; do
+      [[ -d "$bat" ]] || continue
+      local name; name=$(basename "$bat")
+      if [[ -w "$bat/charge_control_end_threshold" ]]; then
+        echo "$limit" | sudo tee "$bat/charge_control_end_threshold" >/dev/null
+        ok "  $name: charge cap → ${limit}%"
+        set=true
+      elif [[ -w "$bat/charge_stop_threshold" ]]; then
+        echo "$limit" | sudo tee "$bat/charge_stop_threshold" >/dev/null
+        ok "  $name: charge cap → ${limit}% (stop_threshold)"
+        set=true
+      fi
+    done
+    if $set; then
+      # persist at boot via systemd service (udev fires too early for some firmware)
+      sudo tee /etc/systemd/system/battery-charge-limit.service >/dev/null << SERVICE
+[Unit]
+Description=Set battery charge limit to ${limit}%
+After=multi-user.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/bash -c 'for f in /sys/class/power_supply/BAT*/charge_control_end_threshold /sys/class/power_supply/BAT*/charge_stop_threshold; do [ -w "\$f" ] && echo ${limit} > "\$f"; done'
+
+[Install]
+WantedBy=multi-user.target
+SERVICE
+      sudo systemctl daemon-reload
+      sudo systemctl enable --now battery-charge-limit.service
+      ok "  charge cap persisted (survives reboots)"
+    else
+      warn "  charge cap not supported by this hardware — try asusctl or vendor tools"
+    fi
+  }
+
+  _set_charge_limit 80
+
+  # lid close — do nothing (stay awake when plugged in at a cafe)
+  kwriteconfig6 --file kscreenlockerrc --group Daemon --key Autolock false
+  sudo tee /etc/systemd/logind.conf.d/lid.conf >/dev/null << 'LID'
+[Login]
+HandleLidSwitch=ignore
+HandleLidSwitchExternalPower=ignore
+HandleLidSwitchDocked=ignore
+LID
+  sudo systemctl daemon-reload
+
+  ok "laptop: charge cap 80%, lid close = do nothing"
+fi
 
 fc-cache -fv &>/dev/null
 mkdir -p "$HOME/.config/fontconfig"
