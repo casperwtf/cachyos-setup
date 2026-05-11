@@ -332,17 +332,17 @@ kw6 --file kcminputrc --group Libinput --key TapToClick     true
 kw6 --file kcminputrc --group Libinput --key TwoFingerTap   true
 kw6 --file kcminputrc --group Libinput --key ScrollMethod   2
 
-# power — never sleep, never dim
+# power management — reasonable defaults
 cat > "$HOME/.config/powermanagementprofilesrc" << 'POWER'
 [AC][BrightnessControl]
 value=100
 
-[AC][DPMSControl]
-idleTime=0
-lockBeforeTurnOff=0
-
 [AC][DimDisplay]
-idleTime=0
+idleTime=540000
+
+[AC][DPMSControl]
+idleTime=600000
+lockBeforeTurnOff=0
 
 [AC][HandleButtonEvents]
 lidAction=0
@@ -354,19 +354,38 @@ suspendThenHibernate=false
 suspendType=0
 
 [Battery][BrightnessControl]
-value=100
+value=80
+
+[Battery][DimDisplay]
+idleTime=120000
 
 [Battery][DPMSControl]
-idleTime=0
-lockBeforeTurnOff=0
+idleTime=300000
+lockBeforeTurnOff=1
+
+[Battery][HandleButtonEvents]
+lidAction=1
+powerButtonAction=1
 
 [Battery][SuspendSession]
-idleTime=0
-suspendType=0
+idleTime=1200000
+suspendThenHibernate=false
+suspendType=1
+
+[LowBattery][BrightnessControl]
+value=50
+
+[LowBattery][DimDisplay]
+idleTime=60000
+
+[LowBattery][DPMSControl]
+idleTime=120000
+lockBeforeTurnOff=1
 
 [LowBattery][SuspendSession]
-idleTime=0
-suspendType=0
+idleTime=300000
+suspendThenHibernate=true
+suspendType=1
 POWER
 
 ok "KDE settings applied"

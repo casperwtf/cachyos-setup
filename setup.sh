@@ -538,15 +538,18 @@ ACTION=="add", SUBSYSTEM=="leds", KERNEL=="*kbd*", RUN+="/usr/bin/brightnessctl 
 UDEV
 
 sudo tee "$HOME/.config/powermanagementprofilesrc" >/dev/null << 'POWER'
+# ── AC (plugged in) ───────────────────────────────────────────────────────────
+# full brightness, screen off after 10 min idle, never suspend
 [AC][BrightnessControl]
 value=100
 
-[AC][DPMSControl]
-idleTime=0
-lockBeforeTurnOff=0
-
 [AC][DimDisplay]
-idleTime=0
+idleTime=540000
+# dim after 9 min (ms), screen off at 10 min
+
+[AC][DPMSControl]
+idleTime=600000
+lockBeforeTurnOff=0
 
 [AC][HandleButtonEvents]
 lidAction=0
@@ -557,13 +560,43 @@ idleTime=0
 suspendThenHibernate=false
 suspendType=0
 
+# ── Battery ───────────────────────────────────────────────────────────────────
+# dim after 2 min, screen off after 5 min, suspend after 20 min
+[Battery][BrightnessControl]
+value=80
+
+[Battery][DimDisplay]
+idleTime=120000
+
+[Battery][DPMSControl]
+idleTime=300000
+lockBeforeTurnOff=1
+
+[Battery][HandleButtonEvents]
+lidAction=1
+powerButtonAction=1
+
 [Battery][SuspendSession]
-idleTime=0
-suspendType=0
+idleTime=1200000
+suspendThenHibernate=false
+suspendType=1
+
+# ── Low Battery ───────────────────────────────────────────────────────────────
+# screen off after 2 min, suspend after 5 min
+[LowBattery][BrightnessControl]
+value=50
+
+[LowBattery][DimDisplay]
+idleTime=60000
+
+[LowBattery][DPMSControl]
+idleTime=120000
+lockBeforeTurnOff=1
 
 [LowBattery][SuspendSession]
-idleTime=0
-suspendType=0
+idleTime=300000
+suspendThenHibernate=true
+suspendType=1
 POWER
 
 # ── laptop-specific settings ─────────────────────────────────────────────────
