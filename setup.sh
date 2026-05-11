@@ -130,6 +130,7 @@ PCONF
 # release any pacman db lock left from the -Syu above
 sudo rm -f /var/lib/pacman/db.lck 2>/dev/null || true
 
+aur asusctl
 aur catppuccin-kde-git
 aur papirus-icon-theme
 aur bibata-cursor-theme
@@ -548,21 +549,27 @@ if $IS_LAPTOP; then
   _set_charge_limit() {
     local limit="$1"
     local set=false
-    for bat in /sys/class/power_supply/BAT*; do
-      [[ -d "$bat" ]] || continue
-      local name; name=$(basename "$bat")
-      if [[ -w "$bat/charge_control_end_threshold" ]]; then
-        echo "$limit" | sudo tee "$bat/charge_control_end_threshold" >/dev/null
-        ok "  $name: charge cap → ${limit}%"
-        set=true
-      elif [[ -w "$bat/charge_stop_threshold" ]]; then
-        echo "$limit" | sudo tee "$bat/charge_stop_threshold" >/dev/null
-        ok "  $name: charge cap → ${limit}% (stop_threshold)"
-        set=true
-      fi
-    done
+
+    # try asusctl first (ASUS laptops)
+    if command -v asusctl &>/dev/null; then
+      asusctl -c "$limit" 2>/dev/null && ok "  charge cap → ${limit}% (asusctl)" && set=true
+    fi
+
+    # try standard sysfs threshold (ThinkPad, Framework, Dell, most others)
+    if ! $set; then
+      for bat in /sys/class/power_supply/BAT*; do
+        [[ -d "$bat" ]] || continue
+        local name; name=$(basename "$bat")
+        for attr in charge_control_end_threshold charge_stop_threshold; do
+          if [[ -f "$bat/$attr" ]]; then
+            echo "$limit" | sudo tee "$bat/$attr" >/dev/null 2>&1 \
+              && ok "  $name: charge cap → ${limit}% ($attr)" && set=true && break
+          fi
+        done
+      done
+    fi
+
     if $set; then
-      # persist at boot via systemd service (udev fires too early for some firmware)
       sudo tee /etc/systemd/system/battery-charge-limit.service >/dev/null << SERVICE
 [Unit]
 Description=Set battery charge limit to ${limit}%
@@ -571,23 +578,23 @@ After=multi-user.target
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-ExecStart=/bin/bash -c 'for f in /sys/class/power_supply/BAT*/charge_control_end_threshold /sys/class/power_supply/BAT*/charge_stop_threshold; do [ -w "\$f" ] && echo ${limit} > "\$f"; done'
+ExecStart=/bin/bash -c 'command -v asusctl && asusctl -c ${limit} || for f in /sys/class/power_supply/BAT*/charge_control_end_threshold /sys/class/power_supply/BAT*/charge_stop_threshold; do [ -f "\$f" ] && echo ${limit} > "\$f"; done'
 
 [Install]
 WantedBy=multi-user.target
 SERVICE
       sudo systemctl daemon-reload
       sudo systemctl enable --now battery-charge-limit.service
-      ok "  charge cap persisted (survives reboots)"
+      ok "  charge cap persisted"
     else
-      warn "  charge cap not supported by this hardware — try asusctl or vendor tools"
+      warn "  charge cap: hardware not supported — install asusctl/tlp/vendor tool manually"
     fi
   }
 
   _set_charge_limit 80
 
-  # lid close — do nothing (stay awake when plugged in at a cafe)
-  kwriteconfig6 --file kscreenlockerrc --group Daemon --key Autolock false
+  # lid close — do nothing when plugged in
+  sudo mkdir -p /etc/systemd/logind.conf.d
   sudo tee /etc/systemd/logind.conf.d/lid.conf >/dev/null << 'LID'
 [Login]
 HandleLidSwitch=ignore
@@ -595,8 +602,7 @@ HandleLidSwitchExternalPower=ignore
 HandleLidSwitchDocked=ignore
 LID
   sudo systemctl daemon-reload
-
-  ok "laptop: charge cap 80%, lid close = do nothing"
+  ok "laptop: lid close = do nothing"
 fi
 
 fc-cache -fv &>/dev/null
