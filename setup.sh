@@ -121,7 +121,6 @@ PCONF
 # release any pacman db lock left from the -Syu above
 sudo rm -f /var/lib/pacman/db.lck 2>/dev/null || true
 
-aur ttf-ms-win11-auto
 aur catppuccin-kde-git
 aur papirus-icon-theme
 aur bibata-cursor-theme
