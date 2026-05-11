@@ -570,15 +570,31 @@ if $IS_LAPTOP; then
     fi
 
     if $set; then
-      sudo tee /etc/systemd/system/battery-charge-limit.service >/dev/null << SERVICE
+      # write a simple helper script — avoids inline shell quoting hell in ExecStart
+      sudo tee /usr/local/bin/battery-charge-limit.sh >/dev/null << SCRIPT
+#!/bin/sh
+LIMIT=${limit}
+# asusctl (ASUS laptops)
+command -v asusctl >/dev/null 2>&1 && asusctl -c \$LIMIT && exit 0
+# standard sysfs threshold
+for attr in charge_control_end_threshold charge_stop_threshold; do
+  for bat in /sys/class/power_supply/BAT*; do
+    f="\$bat/\$attr"
+    [ -f "\$f" ] && printf '%s\n' "\$LIMIT" > "\$f"
+  done
+done
+SCRIPT
+      sudo chmod +x /usr/local/bin/battery-charge-limit.sh
+
+      sudo tee /etc/systemd/system/battery-charge-limit.service >/dev/null << 'SERVICE'
 [Unit]
-Description=Set battery charge limit to ${limit}%
+Description=Set battery charge limit
 After=multi-user.target
 
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-ExecStart=/bin/bash -c 'command -v asusctl && asusctl -c ${limit} || for f in /sys/class/power_supply/BAT*/charge_control_end_threshold /sys/class/power_supply/BAT*/charge_stop_threshold; do [ -f "\$f" ] && echo ${limit} > "\$f"; done'
+ExecStart=/usr/local/bin/battery-charge-limit.sh
 
 [Install]
 WantedBy=multi-user.target
