@@ -1,89 +1,152 @@
 #!/usr/bin/env bash
 # ══════════════════════════════════════════════════════════════════════════════
-#  CachyOS KDE — Game Dev Setup
-#  Scope: Java/C#/general dev, browsers, comms, DevOps, gaming
-#
-#  Structure:
-#    Phase 0  — sudo, system update, paru               (sequential)
-#    Phase 1  — terminal + shell config                 (sequential)
-#    Phase 2  — single pacman batch + single AUR batch  (sequential, can't parallelize pacman)
-#    Phase 3  — all config/service/file writes          (parallel background jobs)
-#    Phase 4  — JDK detection, fnm, post-install steps  (sequential)
-#    Phase 5  — wizard                                  (interactive)
+#  setup.sh — CachyOS KDE game dev setup
+#  idempotent: safe to run multiple times
 # ══════════════════════════════════════════════════════════════════════════════
 set -euo pipefail
-IFS=$'\n\t'
 
-R='\033[0;31m' G='\033[0;32m' Y='\033[1;33m'
-C='\033[0;36m' W='\033[1;37m' D='\033[0m'
+R='\033[0;31m' G='\033[0;32m' Y='\033[1;33m' C='\033[0;36m' W='\033[1;37m' D='\033[0m'
+log()  { echo -e "${C}→${D} $*"; }
+ok()   { echo -e "${G}✔${D} $*"; }
+warn() { echo -e "${Y}⚠${D}  $*"; }
+die()  { echo -e "${R}✖${D} $*" >&2; exit 1; }
+h()    { echo -e "\n${W}━━━  $*  ━━━${D}"; }
 
-log()     { echo -e "${C}→${D} $*"; }
-ok()      { echo -e "${G}✔${D} $*"; }
-warn()    { echo -e "${Y}⚠${D}  $*"; }
-die()     { echo -e "${R}✖${D} $*" >&2; exit 1; }
-section() { echo -e "\n${W}━━━  $*  ━━━${D}"; }
+pi() { sudo pacman -S --needed --noconfirm "$@" 2>&1 | grep -v 'up to date' || true; }
 
-pacin()  { sudo pacman -S --needed --noconfirm "$@"; }
-aurin()  { paru  -S --needed --noconfirm "$@" 2>/dev/null || warn "AUR miss: $*"; }
+aur() {
+  local pkg="$1"
+  if paru -Q "$pkg" &>/dev/null; then return 0; fi
+  if paru -S --needed --noconfirm "$pkg" &>/dev/null; then
+    ok "  $pkg"
+  else
+    warn "  $pkg — skipped"
+  fi
+}
 
-[[ $EUID -eq 0 ]]            && die "Run as your normal user, not root."
-command -v pacman &>/dev/null || die "pacman not found."
+svc_enable() {
+  local bin="$1" svc="$2"
+  if command -v "$bin" &>/dev/null; then
+    sudo systemctl enable "$svc" 2>/dev/null && ok "  $svc" || true
+  else
+    warn "  $svc skipped ($bin not installed)"
+  fi
+}
+
+[[ $EUID -eq 0 ]] && die "run as normal user"
+command -v pacman &>/dev/null || die "pacman not found"
 
 clear
 echo -e "${W}"
-cat << 'BANNER'
-  ╔═══════════════════════════════════════════════╗
-  ║     CachyOS KDE  ·  Game Dev Setup            ║
-  ║     Java · C# · Node · Python · DevOps        ║
-  ╚═══════════════════════════════════════════════╝
-BANNER
+cat << 'EOF'
+  ╔══════════════════════════════════════╗
+  ║  CachyOS KDE · Game Dev Setup       ║
+  ╚══════════════════════════════════════╝
+EOF
 echo -e "${D}"
 
-# ══════════════════════════════════════════════════════════════════════════════
-# PHASE 0 — sudo · system update · paru
-# ══════════════════════════════════════════════════════════════════════════════
-section "Phase 0 — sudo · update · paru"
+h "sudo · multilib · paru"
 
-SUDOERS_FILE="/etc/sudoers.d/nopasswd-wheel"
-if [[ ! -f "$SUDOERS_FILE" ]]; then
-  echo "%wheel ALL=(ALL) NOPASSWD: ALL" | sudo tee "$SUDOERS_FILE" >/dev/null
-  sudo chmod 440 "$SUDOERS_FILE"
-  ok "Passwordless sudo → wheel group."
+SUDOERS="/etc/sudoers.d/nopasswd-wheel"
+if [[ ! -f "$SUDOERS" ]]; then
+  echo "%wheel ALL=(ALL) NOPASSWD: ALL" | sudo tee "$SUDOERS" >/dev/null
+  sudo chmod 440 "$SUDOERS"
+  ok "passwordless sudo → wheel"
 fi
 
-log "System upgrade..."
+log "system upgrade..."
 sudo pacman -Syu --noconfirm
 
 if ! grep -q '^\[multilib\]' /etc/pacman.conf; then
-  log "Enabling multilib..."
   sudo sed -i '/^#\[multilib\]/{n;s/^#//};/^#\[multilib\]/s/^#//' /etc/pacman.conf
   sudo pacman -Sy --noconfirm
+  ok "multilib enabled"
 fi
 
 if ! command -v paru &>/dev/null; then
-  log "Building paru..."
-  pacin git base-devel
+  log "building paru..."
+  pi git base-devel
   T=$(mktemp -d)
   git clone --depth 1 https://aur.archlinux.org/paru-bin.git "$T/paru"
   pushd "$T/paru" >/dev/null; makepkg -si --noconfirm; popd >/dev/null
   rm -rf "$T"
+  ok "paru installed"
 fi
-ok "Phase 0 done."
 
-# ══════════════════════════════════════════════════════════════════════════════
-# PHASE 1 — terminal + shell config (sequential — other phases read these files)
-# ══════════════════════════════════════════════════════════════════════════════
-section "Phase 1 — terminal · fish · starship · ghostty"
+h "pacman packages"
 
-aurin ghostty
-pacin fish starship zoxide fzf fd ripgrep bat eza tmux
+pi \
+  fish starship zoxide fzf fd ripgrep bat eza tmux \
+  ttf-jetbrains-mono-nerd noto-fonts noto-fonts-cjk noto-fonts-emoji \
+  ttf-liberation ttf-dejavu otf-font-awesome \
+  kvantum qt5ct qt6ct \
+  discord signal-desktop \
+  git python python-pip python-virtualenv github-cli \
+  docker docker-compose docker-buildx \
+  sqlitebrowser \
+  android-tools android-udev scrcpy gvfs-mtp \
+  steam gamemode lib32-gamemode mangohud lib32-mangohud \
+  wireguard-tools tailscale wireshark-qt \
+  thunderbird \
+  obs-studio audacity v4l2loopback-dkms flameshot \
+  reflector zram-generator irqbalance cpupower brightnessctl \
+  power-profiles-daemon imagemagick
+ok "pacman done"
 
-sudo usermod -s "$(command -v fish)" "$USER"
-ok "Default shell → fish."
+h "AUR packages"
 
-FISH_CFG="$HOME/.config/fish/config.fish"
-mkdir -p "$(dirname "$FISH_CFG")"
-cat > "$FISH_CFG" << 'FISH'
+aur ttf-ms-win11-auto
+aur catppuccin-kde-git
+aur papirus-icon-theme
+aur bibata-cursor-theme
+aur klassy-bin
+aur vivaldi
+aur vivaldi-ffmpeg-codecs
+aur librewolf-bin
+aur ungoogled-chromium-bin
+aur tor-browser
+aur discord-canary
+aur slack-desktop
+aur rocketchat-desktop
+aur zed
+aur visual-studio-code-bin
+aur jetbrains-toolbox
+aur fnm-bin
+aur bun-bin
+aur docker-desktop
+aur mongodb-compass
+aur dbeaver-ce
+aur redisinsight-bin
+aur nats-server
+aur natscli
+aur prismlauncher
+aur protonup-qt
+aur mullvad-vpn-bin
+aur openlens-bin
+aur minikube
+aur kubectl-bin
+aur 1password
+aur gitbutler-bin
+aur linear-app
+aur spotify
+aur yourkit
+aur blockbench-bin
+aur bruno-bin
+aur flatpak
+aur openrgb
+ok "AUR done"
+
+h "shell — fish · starship · ghostty"
+
+FISH_BIN="$(command -v fish)"
+if [[ "$(getent passwd "$USER" | cut -d: -f7)" != "$FISH_BIN" ]]; then
+  sudo usermod -s "$FISH_BIN" "$USER"
+  ok "default shell → fish"
+fi
+
+mkdir -p "$HOME/.config/fish/conf.d"
+
+cat > "$HOME/.config/fish/config.fish" << 'FISH'
 starship init fish | source
 zoxide init fish | source
 
@@ -95,8 +158,7 @@ alias grep='grep --color=auto'
 
 function jdk
     if test -z "$argv[1]"
-        archlinux-java status
-        return
+        archlinux-java status; return
     end
     sudo archlinux-java set "java-$argv[1]-openjdk"
     set -gx JAVA_HOME /usr/lib/jvm/java-$argv[1]-openjdk
@@ -121,26 +183,26 @@ success_symbol = "[❯](bold green)"
 error_symbol   = "[❯](bold red)"
 
 [directory]
-style             = "bold cyan"
+style = "bold cyan"
 truncation_length = 3
-truncate_to_repo  = true
+truncate_to_repo = true
 
 [git_branch]
 format = " [on](dim white) [$symbol$branch](bold purple)"
 symbol = " "
 
 [git_status]
-format     = "([$all_status$ahead_behind]($style) )"
-style      = "bold yellow"
+format = "([$all_status$ahead_behind]($style) )"
+style = "bold yellow"
 conflicted = "⚡"
-ahead      = "⇡${count}"
-behind     = "⇣${count}"
-modified   = "!${count}"
-untracked  = "?${count}"
-staged     = "+${count}"
+ahead = "⇡${count}"
+behind = "⇣${count}"
+modified = "!${count}"
+untracked = "?${count}"
+staged = "+${count}"
 
 [java]
-format       = " [☕ $version](bold red)"
+format = " [☕ $version](bold red)"
 detect_files = ["pom.xml","build.gradle","*.java"]
 
 [kotlin]
@@ -156,14 +218,13 @@ format = " [py $version](bold yellow)"
 format = " [🐳 $context](bold blue)"
 
 [time]
-disabled    = false
-format      = "[$time](dim white) "
+disabled = false
+format = "[$time](dim white) "
 time_format = "%H:%M"
 STAR
 
-mkdir -p "$HOME/.config/ghostty" "$HOME/.config/ghostty/themes"
+mkdir -p "$HOME/.config/ghostty/themes"
 
-# Write the rose-pine theme file
 cat > "$HOME/.config/ghostty/themes/rose-pine" << 'THEME'
 palette = 0=#191724
 palette = 1=#eb6f92
@@ -193,7 +254,6 @@ theme                  = rose-pine
 font-family            = JetBrainsMono Nerd Font
 font-size              = 13
 font-thicken           = true
-# no window-decoration line — let KDE/Klassy draw the titlebar
 window-padding-x       = 12
 window-padding-y       = 8
 background-opacity     = 0.97
@@ -217,205 +277,36 @@ keybind = ctrl+shift+e=new_split:down
 keybind = ctrl+shift+left_bracket=goto_split:previous
 keybind = ctrl+shift+right_bracket=goto_split:next
 GHOSTTY
-ok "Phase 1 done."
+ok "shell configured"
 
-# ══════════════════════════════════════════════════════════════════════════════
-# PHASE 2 — package installs  (pacman can't run concurrently — one batch each)
-# ══════════════════════════════════════════════════════════════════════════════
-section "Phase 2 — installing all packages"
+h "VSCode"
 
-# ── Official repos — one call ─────────────────────────────────────────────────
-log "pacman batch..."
-pacin \
-  `# fonts` \
-  ttf-jetbrains-mono-nerd noto-fonts noto-fonts-cjk noto-fonts-emoji \
-  ttf-liberation ttf-dejavu otf-font-awesome \
-  `# KDE tooling` \
-  kvantum qt5ct qt6ct \
-  `# browsers — chromium via ungoogled-chromium-bin in AUR batch` \
-  `# comms` \
-  discord signal-desktop \
-  `# dev base` \
-  git python python-pip python-virtualenv github-cli \
-  `# docker` \
-  docker docker-compose docker-buildx \
-  `# db clients` \
-  sqlitebrowser \
-  `# android` \
-  android-tools android-udev scrcpy gvfs-mtp \
-  `# gaming` \
-  steam gamemode lib32-gamemode mangohud lib32-mangohud \
-  `# vpn/net` \
-  wireguard-tools tailscale wireshark-qt \
-  `# devops` \
-  `# productivity` \
-  thunderbird \
-  `# media` \
-  obs-studio audacity v4l2loopback-dkms flameshot \
-  `# tweaks` \
-  reflector zram-generator irqbalance \
-  `# power + keyboard` \
-  cpupower brightnessctl power-profiles-daemon
-ok "pacman batch done."
-
-# ── AUR — install individually so one failure doesn't kill the rest ───────────
-log "AUR packages (individual installs)..."
-
-_aur() {
-  local pkg="$1"
-  if paru -S --needed --noconfirm "$pkg" &>/dev/null; then
-    ok "  $pkg"
-  else
-    warn "  $pkg — failed or skipped"
-  fi
-}
-
-# fonts
-_aur ttf-ms-win11-auto
-
-# KDE theme
-_aur catppuccin-kde-git
-_aur papirus-icon-theme
-_aur bibata-cursor-theme
-_aur klassy-bin
-
-# browsers
-_aur vivaldi
-_aur vivaldi-ffmpeg-codecs
-_aur librewolf-bin
-_aur ungoogled-chromium-bin
-_aur tor-browser
-
-# comms
-_aur discord-canary
-_aur slack-desktop
-_aur rocketchat-desktop
-
-# editors
-_aur zed
-_aur visual-studio-code-bin
-_aur jetbrains-toolbox
-
-# dev
-_aur fnm-bin
-_aur bun-bin
-
-# docker
-_aur docker-desktop
-
-# db
-_aur mongodb-compass
-_aur dbeaver-ce
-
-# redis/nats
-_aur redisinsight-bin
-_aur nats-server
-_aur natscli
-
-# gaming
-_aur prismlauncher
-_aur protonup-qt
-
-# vpn
-_aur mullvad-vpn-bin
-
-# devops
-_aur openlens-bin
-_aur minikube
-_aur kubectl-bin
-
-# productivity
-_aur 1password
-_aur gitbutler-bin
-_aur linear-app
-_aur spotify
-
-# dev tools
-_aur yourkit
-_aur blockbench-bin
-_aur bruno-bin
-
-# system
-_aur flatpak
-_aur openrgb
-
-ok "AUR installs done."
-
-# ══════════════════════════════════════════════════════════════════════════════
-# PHASE 3 — config · services · file writes  (all backgrounded, run in parallel)
-# ══════════════════════════════════════════════════════════════════════════════
-section "Phase 3 — configuring (parallel)"
-
-_jobs=()
-
-# ── Fonts ─────────────────────────────────────────────────────────────────────
-_cfg_fonts() {
-  fc-cache -fv &>/dev/null
-  ok "Fonts: cache refreshed."
-}
-
-# ── KDE defaults ──────────────────────────────────────────────────────────────
-_cfg_kde() {
-  kwriteconfig6 --file kdeglobals --group KDE     --key SingleClick false
-  kwriteconfig6 --file kdeglobals --group General --key ColorScheme 'BreezeDark'
-  kwriteconfig6 --file kdeglobals --group Icons   --key Theme 'Papirus-Dark'
-  kwriteconfig6 --file kwinrc --group org.kde.kdecoration2 --key library 'org.kde.klassy'
-  kwriteconfig6 --file kwinrc --group Windows --key BorderlessMaximizedWindows true
-  kwriteconfig6 --file plasmashellrc --group PlasmaViews --key 'panelOpacity' 1
-  kwriteconfig6 --file baloofilerc --group 'Basic Settings' --key Indexing-Enabled false
-  kwriteconfig6 --file kwinrc --group Compositing --key Backend OpenGL
-  kwriteconfig6 --file kwinrc --group Compositing --key GLTextureFilter 2
-  kwriteconfig6 --file kwinrc --group Compositing --key LatencyControl 0
-  balooctl6 disable 2>/dev/null || balooctl disable 2>/dev/null || true
-  if command -v powerprofilesctl &>/dev/null; then
-    powerprofilesctl set performance
-  else
-    sudo systemctl enable --now power-profiles-daemon
-    powerprofilesctl set performance
-  fi
-  ok "KDE: defaults configured."
-}
-
-# ── VSCode settings ───────────────────────────────────────────────────────────
-_cfg_vscode() {
-  VSCODE_CFG="$HOME/.config/Code/User/settings.json"
-  mkdir -p "$(dirname "$VSCODE_CFG")"
-  cat > "$VSCODE_CFG" << 'VSJSON'
+mkdir -p "$HOME/.config/Code/User"
+cat > "$HOME/.config/Code/User/settings.json" << 'JSON'
 {
   "editor.fontFamily": "'JetBrainsMono Nerd Font', monospace",
   "editor.fontSize": 13,
   "editor.lineHeight": 1.6,
   "editor.fontLigatures": true,
   "editor.tabSize": 4,
-  "editor.insertSpaces": true,
-  "editor.renderWhitespace": "selection",
   "editor.minimap.enabled": false,
   "editor.scrollbar.vertical": "hidden",
   "editor.scrollbar.horizontal": "hidden",
   "editor.overviewRulerBorder": false,
-  "editor.hideCursorInOverviewRuler": true,
   "editor.glyphMargin": false,
-  "editor.folding": false,
   "editor.lineNumbers": "relative",
-  "editor.renderLineHighlight": "gutter",
   "editor.cursorBlinking": "smooth",
   "editor.cursorSmoothCaretAnimation": "on",
   "editor.smoothScrolling": true,
   "editor.bracketPairColorization.enabled": true,
   "editor.guides.bracketPairs": "active",
-  "editor.suggest.preview": true,
-  "editor.inlineSuggest.enabled": true,
   "workbench.colorTheme": "Default Dark Modern",
-  "workbench.iconTheme": "vs-minimal",
   "workbench.activityBar.location": "hidden",
   "workbench.statusBar.visible": true,
   "workbench.layoutControl.enabled": false,
-  "workbench.editor.showTabs": "multiple",
-  "workbench.editor.tabSizing": "shrink",
   "workbench.sideBar.location": "right",
   "workbench.startupEditor": "none",
   "workbench.tips.enabled": false,
-  "workbench.tree.indent": 14,
   "window.titleBarStyle": "custom",
   "window.menuBarVisibility": "compact",
   "window.commandCenter": false,
@@ -430,30 +321,71 @@ _cfg_vscode() {
   "git.confirmSync": false,
   "files.trimTrailingWhitespace": true,
   "files.insertFinalNewline": true,
-  "files.autoSave": "onFocusChange",
-  "[java]": { "editor.defaultFormatter": "redhat.java" },
-  "[csharp]": { "editor.defaultFormatter": "ms-dotnettools.csharp" }
+  "files.autoSave": "onFocusChange"
 }
-VSJSON
-  ok "VSCode: minimal settings written."
-}
+JSON
+ok "VSCode configured"
 
-# ── Docker ────────────────────────────────────────────────────────────────────
-_cfg_docker() {
-  sudo systemctl enable docker.service docker.socket
-  # Don't --now on fresh install — docker.socket starts it on first use
-  sudo usermod -aG docker "$USER"
-  warn "Docker Desktop uses its own context: docker context use desktop-linux"
-  warn "Back to Engine:                       docker context use default"
-  ok "Docker: engine enabled (starts on first use via socket)."
-}
+h "git defaults"
 
-# ── NATS systemd unit ─────────────────────────────────────────────────────────
-_cfg_nats() {
+git config --global init.defaultBranch   main
+git config --global pull.rebase          false
+git config --global core.autocrlf        input
+git config --global push.autoSetupRemote true
+git config --global rerere.enabled       true
+git config --global fetch.prune          true
+
+if ! grep -q '__jdk_switcher__' "$HOME/.bashrc" 2>/dev/null; then
+  cat >> "$HOME/.bashrc" << 'BASH'
+# __jdk_switcher__
+jdk() {
+  if [[ -z "${1:-}" ]]; then archlinux-java status; return; fi
+  sudo archlinux-java set "java-${1}-openjdk"
+  export JAVA_HOME="/usr/lib/jvm/java-${1}-openjdk"
+  java -version
+}
+BASH
+fi
+ok "git + jdk() configured"
+
+h "services"
+
+sudo systemctl enable docker.service docker.socket
+sudo usermod -aG docker "$USER"
+ok "docker enabled"
+
+sudo usermod -aG gamemode "$USER"
+systemctl --user enable --now gamemoded.service 2>/dev/null || true
+ok "gamemode enabled"
+
+sudo usermod -aG adbusers "$USER" 2>/dev/null || true
+ok "adb group set"
+
+svc_enable mullvad   mullvad-daemon.service
+svc_enable tailscale tailscaled.service
+sudo usermod -aG wireshark "$USER"
+sudo setcap cap_net_raw,cap_net_admin=eip /usr/bin/dumpcap 2>/dev/null || true
+ok "VPN daemons enabled"
+
+command -v flatpak &>/dev/null && \
+  flatpak remote-add --if-not-exists flathub \
+    https://dl.flathub.org/repo/flathub.flatpakrepo 2>/dev/null
+ok "flatpak: flathub added"
+
+echo 'v4l2loopback' | sudo tee /etc/modules-load.d/v4l2loopback.conf >/dev/null
+sudo modprobe v4l2loopback 2>/dev/null || true
+ok "OBS virtual camera module loaded"
+
+if command -v minikube &>/dev/null; then
+  minikube config set driver docker 2>/dev/null
+  ok "minikube driver → docker"
+fi
+
+if command -v nats-server &>/dev/null; then
   mkdir -p "$HOME/.config/systemd/user"
   cat > "$HOME/.config/systemd/user/nats-dev.service" << 'NATS'
 [Unit]
-Description=NATS dev server (local)
+Description=NATS dev server
 After=network.target
 
 [Service]
@@ -465,61 +397,20 @@ WantedBy=default.target
 NATS
   systemctl --user daemon-reload
   systemctl --user enable --now nats-dev.service
-  ok "NATS: dev server enabled (4222/8222)."
-}
+  ok "NATS enabled (4222/8222)"
+fi
 
-# ── Android ───────────────────────────────────────────────────────────────────
-_cfg_android() {
-  sudo usermod -aG adbusers "$USER" 2>/dev/null || true
-  ok "Android: adb group set."
-}
-
-# ── Gaming ────────────────────────────────────────────────────────────────────
-_cfg_gaming() {
-  sudo usermod -aG gamemode "$USER"
-  systemctl --user enable --now gamemoded.service 2>/dev/null || true
-  ok "Gaming: GameMode enabled."
-}
-
-# ── VPN/net ───────────────────────────────────────────────────────────────────
-_cfg_vpn() {
-  command -v mullvad     &>/dev/null && sudo systemctl enable mullvad-daemon.service  || warn "mullvad not installed yet — skipping daemon enable"
-  command -v tailscale   &>/dev/null && sudo systemctl enable tailscaled.service      || warn "tailscale not installed yet — skipping daemon enable"
-  sudo usermod -aG wireshark "$USER"
-  sudo setcap cap_net_raw,cap_net_admin=eip /usr/bin/dumpcap 2>/dev/null || true
-  ok "VPN: configured (daemons start on next boot after install)."
-}
-
-# ── Minikube ──────────────────────────────────────────────────────────────────
-_cfg_minikube() {
-  minikube config set driver docker 2>/dev/null || true
-  ok "Minikube: driver → docker."
-}
-
-# ── 1Password SSH agent ───────────────────────────────────────────────────────
-_cfg_1password() {
-  mkdir -p "$HOME/.config/fish/conf.d"
-  cat > "$HOME/.config/fish/conf.d/1password-ssh.fish" << 'OP'
+cat > "$HOME/.config/fish/conf.d/1password-ssh.fish" << 'OP'
 set -gx SSH_AUTH_SOCK "$HOME/.1password/agent.sock"
 OP
-  ok "1Password: SSH agent socket configured."
-}
 
-# ── OBS virtual camera ────────────────────────────────────────────────────────
-_cfg_media() {
-  echo 'v4l2loopback' | sudo tee /etc/modules-load.d/v4l2loopback.conf >/dev/null
-  sudo modprobe v4l2loopback 2>/dev/null || true
-  kwriteconfig6 --file kglobalshortcutsrc \
-    --group flameshot --key 'capture' 'Print,Print,Take screenshot'
-  ok "Media: OBS virtual camera + Flameshot shortcut set."
-}
+h "system tweaks"
 
-# ── System tweaks ─────────────────────────────────────────────────────────────
-_cfg_tweaks() {
-  sudo reflector --protocol https --sort rate --latest 10 \
-    --save /etc/pacman.d/mirrorlist 2>/dev/null
-  ok "Tweaks: mirrors refreshed."
+log "refreshing mirrors..."
+sudo reflector --protocol https --sort rate --latest 10 \
+  --save /etc/pacman.d/mirrorlist 2>/dev/null && ok "mirrors refreshed"
 
+if [[ ! -f /etc/systemd/zram-generator.conf ]]; then
   sudo bash -c 'cat > /etc/systemd/zram-generator.conf << EOF
 [zram0]
 zram-size = ram / 2
@@ -527,48 +418,73 @@ compression-algorithm = zstd
 EOF'
   sudo systemctl daemon-reload
   sudo systemctl start systemd-zram-setup@zram0.service 2>/dev/null || true
-  ok "Tweaks: zram enabled."
+  ok "zram enabled"
+fi
 
-  echo "vm.swappiness=10"            | sudo tee /etc/sysctl.d/99-swappiness.conf >/dev/null
-  echo "fs.inotify.max_user_watches=524288" | sudo tee /etc/sysctl.d/99-inotify.conf >/dev/null
-  sudo sysctl -p /etc/sysctl.d/99-swappiness.conf &>/dev/null
-  sudo sysctl -p /etc/sysctl.d/99-inotify.conf &>/dev/null
-  ok "Tweaks: swappiness=10, inotify=524288."
+sudo tee /etc/sysctl.d/99-perf.conf >/dev/null << 'SYSCTL'
+vm.swappiness=10
+fs.inotify.max_user_watches=524288
+SYSCTL
+sudo sysctl --system &>/dev/null
+ok "sysctl applied"
 
-  sudo systemctl enable --now fstrim.timer
-  sudo systemctl enable --now irqbalance
-  ok "Tweaks: fstrim + irqbalance enabled."
-}
+sudo systemctl enable --now fstrim.timer irqbalance
 
-# ── Git global config ─────────────────────────────────────────────────────────
-_cfg_git() {
-  git config --global init.defaultBranch main
-  git config --global pull.rebase false
-  git config --global core.autocrlf input
-  git config --global push.autoSetupRemote true
-  git config --global rerere.enabled true
-  git config --global fetch.prune true
-  ok "Git: global defaults set."
-}
+powerprofilesctl set performance 2>/dev/null || true
+sudo cpupower frequency-set -g performance &>/dev/null || true
+sudo mkdir -p /etc/systemd/system/cpupower.service.d
+sudo tee /etc/systemd/system/cpupower.service.d/performance.conf >/dev/null << 'EOF'
+[Service]
+ExecStart=
+ExecStart=/usr/bin/cpupower frequency-set -g performance
+EOF
+sudo systemctl enable cpupower.service 2>/dev/null || true
 
-# ── Flatpak ───────────────────────────────────────────────────────────────────
-_cfg_flatpak() {
-  flatpak remote-add --if-not-exists flathub \
-    https://dl.flathub.org/repo/flathub.flatpakrepo
-  ok "Flatpak: Flathub added."
-}
+echo 'options usbcore autosuspend=-1' | \
+  sudo tee /etc/modprobe.d/disable-usb-autosuspend.conf >/dev/null
 
-# ── Font rendering ────────────────────────────────────────────────────────────
-_cfg_fontrendering() {
-  kwriteconfig6 --file kdeglobals \
-    --group General --key font 'Noto Sans,10,-1,5,400,0,0,0,0,0,0,0,0,0,0,1'
-  kwriteconfig6 --file kdeglobals \
-    --group General --key fixed 'JetBrainsMono Nerd Font,12,-1,5,400,0,0,0,0,0,0,0,0,0,0,1'
-  kwriteconfig6 --file kcmfonts --group General --key antiAliasing 1
-  kwriteconfig6 --file kcmfonts --group General --key subPixelType rgb
-  kwriteconfig6 --file kcmfonts --group General --key hintingStyle slight
-  mkdir -p "$HOME/.config/fontconfig"
-  cat > "$HOME/.config/fontconfig/fonts.conf" << 'FONTCONF'
+kwriteconfig6 --file kscreenlockerrc --group Daemon --key Autolock false
+kwriteconfig6 --file kscreenlockerrc --group Daemon --key Timeout 0
+
+for dev in /sys/class/leds/*kbd*; do
+  [[ -d "$dev" ]] && brightnessctl --device="$(basename "$dev")" set 100% &>/dev/null || true
+done
+command -v brightnessctl &>/dev/null && sudo tee /etc/udev/rules.d/90-kbd-backlight.rules >/dev/null << 'UDEV'
+ACTION=="add", SUBSYSTEM=="leds", KERNEL=="*kbd*", RUN+="/usr/bin/brightnessctl --device=%k set 100%%"
+UDEV
+
+sudo tee "$HOME/.config/powermanagementprofilesrc" >/dev/null << 'POWER'
+[AC][BrightnessControl]
+value=100
+
+[AC][DPMSControl]
+idleTime=0
+lockBeforeTurnOff=0
+
+[AC][DimDisplay]
+idleTime=0
+
+[AC][HandleButtonEvents]
+lidAction=0
+powerButtonAction=1
+
+[AC][SuspendSession]
+idleTime=0
+suspendThenHibernate=false
+suspendType=0
+
+[Battery][SuspendSession]
+idleTime=0
+suspendType=0
+
+[LowBattery][SuspendSession]
+idleTime=0
+suspendType=0
+POWER
+
+fc-cache -fv &>/dev/null
+mkdir -p "$HOME/.config/fontconfig"
+cat > "$HOME/.config/fontconfig/fonts.conf" << 'FONTCONF'
 <?xml version="1.0"?><!DOCTYPE fontconfig SYSTEM "fonts.dtd">
 <fontconfig>
   <match target="font">
@@ -584,303 +500,127 @@ _cfg_fontrendering() {
     <prefer><family>Noto Sans</family></prefer></alias>
 </fontconfig>
 FONTCONF
-  ok "Font rendering: subpixel LCD configured."
-}
+ok "tweaks applied"
 
-# ── Full power — no throttling, no sleep, max performance ────────────────────
-_cfg_power() {
-  # CPU — performance governor
-  sudo cpupower frequency-set -g performance &>/dev/null || true
-  # Persist across reboots
-  sudo mkdir -p /etc/systemd/system/cpupower.service.d
-  cat << 'EOF' | sudo tee /etc/systemd/system/cpupower.service.d/performance.conf >/dev/null
-[Service]
-ExecStart=
-ExecStart=/usr/bin/cpupower frequency-set -g performance
-EOF
-  sudo systemctl enable cpupower.service 2>/dev/null || true
+h "JDKs"
 
-  # Power profile daemon → performance
-  powerprofilesctl set performance 2>/dev/null || true
-
-  # USB autosuspend — disable (stops peripherals dropping out)
-  echo -1 | sudo tee /sys/module/usbcore/parameters/autosuspend &>/dev/null || true
-  echo 'options usbcore autosuspend=-1' \
-    | sudo tee /etc/modprobe.d/disable-usb-autosuspend.conf >/dev/null
-
-  # KDE power management — never sleep, never dim, never lock on idle
-  POWER_CFG="$HOME/.config/powermanagementprofilesrc"
-  mkdir -p "$(dirname "$POWER_CFG")"
-  cat > "$POWER_CFG" << 'POWER'
-[AC][BrightnessControl]
-value=100
-
-[AC][DPMSControl]
-idleTime=0
-lockBeforeTurnOff=0
-
-[AC][DimDisplay]
-idleTime=0
-
-[AC][HandleButtonEvents]
-lidAction=0
-powerButtonAction=1
-powerDownAction=1
-
-[AC][SuspendSession]
-idleTime=0
-suspendThenHibernate=false
-suspendType=0
-
-[Battery][BrightnessControl]
-value=100
-
-[Battery][DPMSControl]
-idleTime=0
-lockBeforeTurnOff=0
-
-[Battery][SuspendSession]
-idleTime=0
-suspendType=0
-
-[LowBattery][SuspendSession]
-idleTime=0
-suspendType=0
-POWER
-
-  # Screen locker — disable auto-lock
-  kwriteconfig6 --file kscreenlockerrc \
-    --group Daemon --key Autolock false
-  kwriteconfig6 --file kscreenlockerrc \
-    --group Daemon --key Timeout 0
-
-  # Keyboard backlight — max brightness on login
-  if command -v brightnessctl &>/dev/null; then
-    # Try common keyboard backlight device paths
-    for dev in /sys/class/leds/*kbd*; do
-      [[ -d "$dev" ]] && brightnessctl --device="$(basename "$dev")" set 100% &>/dev/null || true
-    done
-    # Persist via udev rule
-    cat << 'UDEV' | sudo tee /etc/udev/rules.d/90-kbd-backlight.rules >/dev/null
-ACTION=="add", SUBSYSTEM=="leds", KERNEL=="*kbd*", \
-  RUN+="/usr/bin/brightnessctl --device=%k set 100%%"
-UDEV
-  fi
-
-  # OpenRGB — udev rules for non-root access (configure RGB manually after install)
-  if command -v openrgb &>/dev/null; then
-    sudo udevadm control --reload-rules 2>/dev/null || true
-  fi
-
-  ok "Power: CPU=performance, no sleep, no dim, keyboard backlight=max."
-}
-_cfg_bashrc() {
-  cat >> "$HOME/.bashrc" << 'BASH'
-
-jdk() {
-  if [[ -z "${1:-}" ]]; then archlinux-java status; return; fi
-  sudo archlinux-java set "java-${1}-openjdk"
-  export JAVA_HOME="/usr/lib/jvm/java-${1}-openjdk"
-  java -version
-}
-BASH
-  ok "bashrc: jdk() switcher added."
-}
-
-# ── Launch all config jobs in parallel ────────────────────────────────────────
-log "Spawning config jobs..."
-
-_cfg_fonts         & _jobs+=($!)
-_cfg_kde           & _jobs+=($!)
-_cfg_vscode        & _jobs+=($!)
-_cfg_docker        & _jobs+=($!)
-_cfg_nats          & _jobs+=($!)
-_cfg_android       & _jobs+=($!)
-_cfg_gaming        & _jobs+=($!)
-_cfg_vpn           & _jobs+=($!)
-_cfg_minikube      & _jobs+=($!)
-_cfg_1password     & _jobs+=($!)
-_cfg_media         & _jobs+=($!)
-_cfg_tweaks        & _jobs+=($!)
-_cfg_git           & _jobs+=($!)
-_cfg_flatpak       & _jobs+=($!)
-_cfg_fontrendering & _jobs+=($!)
-_cfg_bashrc        & _jobs+=($!)
-_cfg_power         & _jobs+=($!)
-
-log "Waiting for ${#_jobs[@]} config jobs..."
-_failed=0
-for pid in "${_jobs[@]}"; do
-  wait "$pid" || (( _failed++ )) || true
-done
-
-if (( _failed > 0 )); then
-  warn "$_failed config job(s) had errors — check output above."
+mapfile -t JDKS < <(pacman -Ssq '^jdk[0-9]+-openjdk$' 2>/dev/null | sort -V | uniq)
+if [[ ${#JDKS[@]} -gt 0 ]]; then
+  log "found: ${JDKS[*]}"
+  pi "${JDKS[@]}"
 else
-  ok "Phase 3 done — all config jobs complete."
+  warn "auto-discovery failed — installing known LTS list"
+  pi jdk8-openjdk jdk11-openjdk jdk17-openjdk jdk21-openjdk 2>/dev/null || true
 fi
 
-# ══════════════════════════════════════════════════════════════════════════════
-# PHASE 4 — sequential post-install (depends on packages being present)
-# ══════════════════════════════════════════════════════════════════════════════
-section "Phase 4 — JDKs · Node · post-install"
-
-# ── JDKs ─────────────────────────────────────────────────────────────────────
-log "Discovering OpenJDK LTS packages..."
-AVAILABLE_JDKS=$(pacman -Ssq '^jdk[0-9]+-openjdk$' 2>/dev/null | sort -V | uniq || true)
-if [[ -n "$AVAILABLE_JDKS" ]]; then
-  log "Found: $(echo "$AVAILABLE_JDKS" | tr '\n' ' ')"
-  # shellcheck disable=SC2086
-  pacin $AVAILABLE_JDKS
-else
-  warn "JDK auto-discovery failed — falling back to known LTS list."
-  pacin jdk8-openjdk jdk11-openjdk jdk17-openjdk jdk21-openjdk 2>/dev/null || true
-fi
-
-INSTALLED_VERSIONS=$(archlinux-java status 2>/dev/null | grep -oP 'java-\K[0-9]+(?=-openjdk)' | sort -n | uniq || true)
-HIGHEST=$(echo "$INSTALLED_VERSIONS" | tail -1)
+HIGHEST=$(archlinux-java status 2>/dev/null \
+  | grep -oP 'java-\K[0-9]+(?=-openjdk)' | sort -n | uniq | tail -1 || true)
 if [[ -n "$HIGHEST" ]]; then
   NEXT=$(( HIGHEST + 4 ))
-  log "Trying AUR for jdk${NEXT}-openjdk..."
-  if paru -S --needed --noconfirm "jdk${NEXT}-openjdk" &>/dev/null; then
-    ok "jdk${NEXT}-openjdk installed from AUR."
-  else
-    log "jdk${NEXT} not in AUR yet — you have the latest."
+  if ! paru -Q "jdk${NEXT}-openjdk" &>/dev/null; then
+    paru -S --needed --noconfirm "jdk${NEXT}-openjdk" &>/dev/null \
+      && ok "jdk${NEXT} installed from AUR" \
+      || log "jdk${NEXT} not in AUR yet"
   fi
 fi
 
-# ── Node via fnm ─────────────────────────────────────────────────────────────
-log "Installing Node LTS via fnm..."
-export FNM_DIR="$HOME/.local/share/fnm"
-export PATH="$FNM_DIR:$PATH"
-eval "$(fnm env --shell bash 2>/dev/null)" || true
-fnm install --lts
-fnm default lts-latest 2>/dev/null || true
-npm i -g typescript tsx pnpm prettier eslint 2>/dev/null \
-  && ok "Node $(node -v 2>/dev/null) + globals installed." \
-  || warn "npm globals failed — run after relogin: npm i -g typescript tsx pnpm prettier eslint"
+LATEST=$(archlinux-java status 2>/dev/null \
+  | grep -oP 'java-\K[0-9]+-openjdk' | sort -t- -k1 -n | tail -1 || true)
+[[ -n "$LATEST" ]] && sudo archlinux-java set "java-${LATEST}" 2>/dev/null \
+  && ok "default JDK → java-${LATEST}"
 
-ok "Phase 4 done."
+h "Node (fnm)"
 
-# Enable VPN daemons here — guaranteed packages are installed by now
-command -v mullvad   &>/dev/null && sudo systemctl enable mullvad-daemon.service  2>/dev/null && ok "Mullvad daemon enabled." || true
-command -v tailscale &>/dev/null && sudo systemctl enable tailscaled.service      2>/dev/null && ok "Tailscale daemon enabled." || true
-
-# ══════════════════════════════════════════════════════════════════════════════
-# DONE
-# ══════════════════════════════════════════════════════════════════════════════
-echo -e ""
-echo -e "${W}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${D}"
-echo -e "${G}  ✔  Setup complete.${D}"
-echo -e "${W}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${D}"
-echo -e ""
-echo -e "  ${C}After reboot:${D}"
-echo -e "    ${Y}sudo tailscale up${D}         → connect Tailscale"
-echo -e "    ${Y}protonup-qt${D}               → download Proton-GE"
-echo -e "    ${Y}jetbrains-toolbox${D}          → install IDEs"
-echo -e ""
-echo -e "  ${C}JDK switching:${D}"
-echo -e "    ${Y}jdk 8|11|17|21|25${D}         → switch default JVM"
-echo -e "    ${Y}jdk${D}                       → list installed"
-echo -e ""
-
-# ══════════════════════════════════════════════════════════════════════════════
-# PHASE 5 — configuration wizard (interactive, always last)
-# ══════════════════════════════════════════════════════════════════════════════
-_wizard_ask() {
-  printf "\n  ${Y}?${D} $1 [Y/n] "
-  local r; read -r r; [[ "${r:-y}" =~ ^[Yy]$ ]]
-}
-_wizard_step() { echo -e "\n${W}  ─── $* ───${D}"; }
-
-echo -e "${W}━━━  Configuration Wizard  ━━━${D}"
-echo -e "  walks through things that need your input."
-printf "\n  run it? [Y/n] "; read -r _RUN_WIZARD
-if [[ "${_RUN_WIZARD:-y}" =~ ^[Yy]$ ]]; then
-
-  _wizard_step "Git identity"
-  if _wizard_ask "Set git name and email?"; then
-    printf "  name:  "; read -r _GIT_NAME
-    printf "  email: "; read -r _GIT_EMAIL
-    git config --global user.name  "$_GIT_NAME"
-    git config --global user.email "$_GIT_EMAIL"
-    ok "Git: $_GIT_NAME <$_GIT_EMAIL>"
+if command -v fnm &>/dev/null; then
+  export FNM_DIR="$HOME/.local/share/fnm"
+  export PATH="$FNM_DIR:$PATH"
+  eval "$(fnm env --shell bash 2>/dev/null)" || true
+  fnm install --lts 2>/dev/null || true
+  fnm default lts-latest 2>/dev/null || true
+  if command -v npm &>/dev/null; then
+    npm i -g typescript tsx pnpm prettier eslint 2>/dev/null \
+      && ok "Node $(node -v) + globals" \
+      || warn "npm globals: run after relogin"
   fi
-
-  _wizard_step "SSH key (ed25519)"
-  if [[ ! -f "$HOME/.ssh/id_ed25519" ]]; then
-    if _wizard_ask "Generate SSH key?"; then
-      printf "  email for key: "; read -r _SSH_EMAIL
-      _SSH_EMAIL="${_SSH_EMAIL:-${_GIT_EMAIL:-$(whoami)@$(hostname)}}"
-      ssh-keygen -t ed25519 -C "$_SSH_EMAIL" -f "$HOME/.ssh/id_ed25519" -N ""
-      eval "$(ssh-agent -s)" &>/dev/null
-      ssh-add "$HOME/.ssh/id_ed25519" 2>/dev/null
-      echo -e "\n  ${C}Public key — add to GitHub / GitLab:${D}"
-      echo -e "  ${W}$(cat "$HOME/.ssh/id_ed25519.pub")${D}"
-    fi
-  else
-    ok "SSH key exists at ~/.ssh/id_ed25519"
-    echo -e "  ${W}$(cat "$HOME/.ssh/id_ed25519.pub")${D}"
-  fi
-
-  _wizard_step "GitHub CLI"
-  if _wizard_ask "Authenticate gh? (opens browser)"; then
-    gh auth login
-  fi
-
-  _wizard_step "Docker context"
-  echo -e "  default  → Docker Engine"
-  echo -e "  desktop  → Docker Desktop (separate VM)"
-  if _wizard_ask "Switch to Docker Desktop context?"; then
-    docker context use desktop-linux 2>/dev/null \
-      && ok "Docker context → desktop-linux" \
-      || warn "Desktop context not found — is Docker Desktop running?"
-  else
-    docker context use default 2>/dev/null || true
-    ok "Docker context → default (Engine)"
-  fi
-
-  _wizard_step "Tailscale"
-  if _wizard_ask "Connect Tailscale?"; then
-    sudo tailscale up
-  fi
-
-  _wizard_step "Mullvad VPN"
-  if _wizard_ask "Log in to Mullvad?"; then
-    printf "  account number: "; read -r _MULLVAD_ACCT
-    mullvad account login "$_MULLVAD_ACCT" \
-      && ok "Mullvad logged in." \
-      || warn "Login failed — run: mullvad account login <number>"
-  fi
-
-  _wizard_step "1Password SSH agent"
-  if _wizard_ask "Enable 1Password SSH agent?"; then
-    warn "Enable in 1Password → Settings → Developer → SSH Agent."
-  fi
-
-  _wizard_step "Default JDK"
-  echo -e "  $(archlinux-java status 2>/dev/null || echo 'none found')"
-  if _wizard_ask "Set a default JDK?"; then
-    printf "  version (8/11/17/21/25): "; read -r _JDK_VER
-    sudo archlinux-java set "java-${_JDK_VER}-openjdk" \
-      && ok "Default JDK → $_JDK_VER" \
-      || warn "Could not set — check: archlinux-java status"
-  fi
-
-  _wizard_step "Custom wallpaper"
-  if _wizard_ask "Add a custom wallpaper to the rotation?"; then
-    printf "  path to image: "; read -r _WALL_PATH
-    _WALL_PATH="${_WALL_PATH/#\~/$HOME}"
-    if [[ -f "$_WALL_PATH" ]]; then
-      mkdir -p "$HOME/.local/share/wallpapers/rice"
-      cp "$_WALL_PATH" "$HOME/.local/share/wallpapers/rice/$(basename "$_WALL_PATH")"
-      ok "Wallpaper added to rotation."
-    else
-      warn "File not found: $_WALL_PATH"
-    fi
-  fi
-
-  echo -e "\n${G}  ✔  Wizard complete.${D}\n"
 fi
 
-echo -e "  ${C}Reboot now:${D}  ${Y}sudo reboot${D}\n"
+echo -e "\n${W}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${D}"
+echo -e "${G}  ✔  setup complete${D}"
+echo -e "${W}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${D}\n"
+echo -e "  next: run ${Y}bash rice.sh${D} from a KDE session"
+echo -e "  then: ${Y}sudo reboot${D}\n"
+
+h "configuration wizard"
+
+_ask() { printf "\n  ${Y}?${D} $1 [Y/n] "; local r; read -r r; [[ "${r:-y}" =~ ^[Yy]$ ]]; }
+_step() { echo -e "\n${W}  ─── $* ───${D}"; }
+
+printf "\n  run wizard? [Y/n] "; read -r _W
+[[ "${_W:-y}" =~ ^[Yy]$ ]] || { echo -e "  ${Y}run rice.sh when ready${D}\n"; exit 0; }
+
+_step "git identity"
+if _ask "set git name + email?"; then
+  printf "  name:  "; read -r _N
+  printf "  email: "; read -r _E
+  git config --global user.name  "$_N"
+  git config --global user.email "$_E"
+  ok "git: $_N <$_E>"
+fi
+
+_step "SSH key"
+if [[ ! -f "$HOME/.ssh/id_ed25519" ]]; then
+  if _ask "generate SSH key?"; then
+    printf "  email: "; read -r _SE
+    _SE="${_SE:-$(whoami)@$(hostname)}"
+    ssh-keygen -t ed25519 -C "$_SE" -f "$HOME/.ssh/id_ed25519" -N ""
+    eval "$(ssh-agent -s)" &>/dev/null; ssh-add "$HOME/.ssh/id_ed25519" 2>/dev/null
+    echo -e "\n  ${C}public key:${D}\n  ${W}$(cat "$HOME/.ssh/id_ed25519.pub")${D}"
+  fi
+else
+  ok "SSH key exists: $(cat "$HOME/.ssh/id_ed25519.pub")"
+fi
+
+_step "GitHub CLI"
+_ask "gh auth login?" && gh auth login
+
+_step "Docker context"
+if _ask "use Docker Desktop context?"; then
+  docker context use desktop-linux 2>/dev/null && ok "context → desktop-linux" \
+    || warn "context not found — start Docker Desktop first"
+else
+  docker context use default 2>/dev/null || true
+  ok "context → default (engine)"
+fi
+
+_step "Tailscale"
+_ask "connect tailscale?" && sudo tailscale up
+
+_step "Mullvad"
+if _ask "log in to Mullvad?"; then
+  printf "  account number: "; read -r _MA
+  mullvad account login "$_MA" && ok "Mullvad logged in" \
+    || warn "failed — run: mullvad account login <number>"
+fi
+
+_step "default JDK"
+echo "  $(archlinux-java status 2>/dev/null || echo 'none')"
+if _ask "set default JDK?"; then
+  printf "  version (8/11/17/21/25): "; read -r _JV
+  sudo archlinux-java set "java-${_JV}-openjdk" && ok "JDK → $_JV" \
+    || warn "not found — check: archlinux-java status"
+fi
+
+_step "wallpaper"
+if _ask "add a wallpaper to the rotation?"; then
+  printf "  path: "; read -r _WP
+  _WP="${_WP/#\~/$HOME}"
+  if [[ -f "$_WP" ]]; then
+    mkdir -p "$HOME/.local/share/wallpapers/rice"
+    cp "$_WP" "$HOME/.local/share/wallpapers/rice/$(basename "$_WP")"
+    ok "added to rotation"
+  else
+    warn "not found: $_WP"
+  fi
+fi
+
+echo -e "\n${G}  ✔  wizard done — run rice.sh next${D}\n"
