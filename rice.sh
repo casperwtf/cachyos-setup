@@ -338,10 +338,10 @@ cat > "$HOME/.config/powermanagementprofilesrc" << 'POWER'
 value=100
 
 [AC][DimDisplay]
-idleTime=540000
+idleTime=0
 
 [AC][DPMSControl]
-idleTime=600000
+idleTime=0
 lockBeforeTurnOff=0
 
 [AC][HandleButtonEvents]

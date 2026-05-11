@@ -544,11 +544,11 @@ sudo tee "$HOME/.config/powermanagementprofilesrc" >/dev/null << 'POWER'
 value=100
 
 [AC][DimDisplay]
-idleTime=540000
+idleTime=0
 # dim after 9 min (ms), screen off at 10 min
 
 [AC][DPMSControl]
-idleTime=600000
+idleTime=0
 lockBeforeTurnOff=0
 
 [AC][HandleButtonEvents]
