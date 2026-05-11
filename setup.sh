@@ -420,25 +420,48 @@ fi
 if command -v vivaldi-stable &>/dev/null || command -v vivaldi &>/dev/null; then
   VIVALDI_DESKTOP="vivaldi-stable.desktop"
   [[ -f /usr/share/applications/vivaldi.desktop ]] && VIVALDI_DESKTOP="vivaldi.desktop"
+
+  # xdg-settings
   xdg-settings set default-web-browser "$VIVALDI_DESKTOP" 2>/dev/null || true
-  # also write mimeapps.list directly for KDE
-  mkdir -p "$HOME/.config"
-  MIMEAPPS="$HOME/.config/mimeapps.list"
-  # remove existing browser entries then add vivaldi
-  if [[ -f "$MIMEAPPS" ]]; then
-    sed -i '/x-scheme-handler\/http/d;/x-scheme-handler\/https/d;/x-scheme-handler\/ftp/d;/text\/html/d;/application\/xhtml/d' "$MIMEAPPS"
-  fi
-  cat >> "$MIMEAPPS" << EOF
-[Default Applications]
-x-scheme-handler/http=$VIVALDI_DESKTOP
-x-scheme-handler/https=$VIVALDI_DESKTOP
-x-scheme-handler/ftp=$VIVALDI_DESKTOP
-text/html=$VIVALDI_DESKTOP
-application/xhtml+xml=$VIVALDI_DESKTOP
-EOF
+
+  # KDE-specific — this is what Plasma actually reads
+  kwriteconfig6 --file kdeglobals --group General \
+    --key BrowserApplication "$VIVALDI_DESKTOP"
+
+  # write mimeapps.list properly using python — avoids duplicate section bug
+  python3 - "$VIVALDI_DESKTOP" << 'PY'
+import configparser, os, sys
+
+desktop = sys.argv[1]
+path = os.path.expanduser('~/.config/mimeapps.list')
+
+cfg = configparser.RawConfigParser()
+cfg.optionxform = str   # preserve case
+if os.path.exists(path):
+    cfg.read(path)
+
+if 'Default Applications' not in cfg:
+    cfg['Default Applications'] = {}
+
+for mime in [
+    'x-scheme-handler/http',
+    'x-scheme-handler/https',
+    'x-scheme-handler/ftp',
+    'text/html',
+    'application/xhtml+xml',
+]:
+    cfg['Default Applications'][mime] = desktop
+
+with open(path, 'w') as f:
+    cfg.write(f)
+
+print(f'mimeapps.list updated → {desktop}')
+PY
+
   ok "default browser → Vivaldi"
 else
-  warn "Vivaldi not installed yet — set default browser manually after install"
+  warn "Vivaldi not installed — run: paru -S vivaldi vivaldi-ffmpeg-codecs"
+  warn "then: xdg-settings set default-web-browser vivaldi-stable.desktop"
 fi
 
 if command -v nats-server &>/dev/null; then
