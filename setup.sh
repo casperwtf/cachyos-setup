@@ -574,15 +574,16 @@ if $IS_LAPTOP; then
       sudo tee /usr/local/bin/battery-charge-limit.sh >/dev/null << SCRIPT
 #!/bin/sh
 LIMIT=${limit}
-# asusctl (ASUS laptops)
 command -v asusctl >/dev/null 2>&1 && asusctl -c \$LIMIT && exit 0
-# standard sysfs threshold
 for attr in charge_control_end_threshold charge_stop_threshold; do
   for bat in /sys/class/power_supply/BAT*; do
     f="\$bat/\$attr"
-    [ -f "\$f" ] && printf '%s\n' "\$LIMIT" > "\$f"
+    if [ -f "\$f" ]; then
+      printf '%d\n' "\$LIMIT" > "\$f"
+    fi
   done
 done
+exit 0
 SCRIPT
       sudo chmod +x /usr/local/bin/battery-charge-limit.sh
 
