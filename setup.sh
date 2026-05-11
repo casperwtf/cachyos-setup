@@ -435,8 +435,9 @@ import configparser, os, sys
 desktop = sys.argv[1]
 path = os.path.expanduser('~/.config/mimeapps.list')
 
-cfg = configparser.RawConfigParser()
-cfg.optionxform = str   # preserve case
+# strict=False allows duplicate sections (from previous broken runs)
+cfg = configparser.RawConfigParser(strict=False)
+cfg.optionxform = str
 if os.path.exists(path):
     cfg.read(path)
 
@@ -455,7 +456,7 @@ for mime in [
 with open(path, 'w') as f:
     cfg.write(f)
 
-print(f'mimeapps.list updated → {desktop}')
+print(f'mimeapps.list → {desktop}')
 PY
 
   ok "default browser → Vivaldi"
