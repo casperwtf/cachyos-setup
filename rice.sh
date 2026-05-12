@@ -25,7 +25,7 @@ sudo pacman -S --needed --noconfirm \
   fuzzel mako swaylock grim slurp wl-clipboard \
   swaybg xdg-desktop-portal-gnome libnotify \
   papirus-icon-theme noto-fonts ttf-jetbrains-mono-nerd \
-  brightnessctl nm-applet blueman
+  brightnessctl network-manager-applet blueman
 
 GIT_TERMINAL_PROMPT=0 PAGER=cat paru -S --needed --noconfirm \
   niri-bin quickshell-git bibata-cursor-theme \
