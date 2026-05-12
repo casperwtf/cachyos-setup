@@ -1,338 +1,581 @@
 #!/usr/bin/env bash
 # ══════════════════════════════════════════════════════════════════════════════
-#  rice.sh — KDE theming for CachyOS
+#  rice.sh — Niri + Quickshell setup
+#  Rosé Pine · quickshell · fuzzel · mako · swaylock
 #  idempotent: safe to re-run
-#  run from inside a KDE Plasma session
 # ══════════════════════════════════════════════════════════════════════════════
 set -euo pipefail
 
-R='\033[0;31m' G='\033[0;32m' Y='\033[1;33m' C='\033[0;36m' W='\033[1;37m' D='\033[0m'
-log()  { echo -e "${C}→${D} $*"; }
-ok()   { echo -e "${G}✔${D} $*"; }
-warn() { echo -e "${Y}⚠${D}  $*"; }
-h()    { echo -e "\n${W}━━━  $*  ━━━${D}"; }
-kw6()  { kwriteconfig6 "$@"; }
+G='\033[0;32m' Y='\033[1;33m' C='\033[0;36m' W='\033[1;37m' D='\033[0m'
+ok()  { echo -e "${G}✔${D} $*"; }
+warn(){ echo -e "${Y}⚠${D}  $*"; }
+h()   { echo -e "\n${W}━━━  $*  ━━━${D}"; }
+log() { echo -e "${C}→${D} $*"; }
 
-[[ $EUID -eq 0 ]]                    && { echo "run as normal user"; exit 1; }
-pgrep -x plasmashell &>/dev/null     || { echo "plasmashell not running — log into KDE first"; exit 1; }
-command -v kwriteconfig6 &>/dev/null || { echo "kwriteconfig6 not found"; exit 1; }
-
+[[ $EUID -eq 0 ]] && { echo "run as normal user"; exit 1; }
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-echo -e "\n${W}  KDE rice — Rosé Pine · warm minimal${D}\n"
+echo -e "\n${W}  Niri rice — Rosé Pine + Quickshell${D}\n"
 
 # ══════════════════════════════════════════════════════════════════════════════
 h "packages"
 # ══════════════════════════════════════════════════════════════════════════════
 
-sudo pacman -S --needed --noconfirm kvantum qt5ct qt6ct imagemagick papirus-icon-theme
-paru -S --needed --noconfirm klassy-bin catppuccin-kde-git bibata-cursor-theme \
-  kvantum-theme-catppuccin-git 2>/dev/null || true
+sudo pacman -S --needed --noconfirm \
+  fuzzel mako swaylock grim slurp wl-clipboard \
+  swaybg xdg-desktop-portal-gnome libnotify \
+  papirus-icon-theme noto-fonts ttf-jetbrains-mono-nerd \
+  brightnessctl nm-applet blueman
+
+GIT_TERMINAL_PROMPT=0 PAGER=cat paru -S --needed --noconfirm \
+  niri-bin quickshell-git bibata-cursor-theme \
+  rose-pine-gtk-theme-full </dev/null 2>/dev/null || \
+  warn "some AUR packages skipped"
+
 ok "packages ready"
 
 # ══════════════════════════════════════════════════════════════════════════════
-h "Rosé Pine color scheme"
+h "environment"
 # ══════════════════════════════════════════════════════════════════════════════
 
-mkdir -p "$HOME/.local/share/color-schemes"
-cat > "$HOME/.local/share/color-schemes/RosePine.colors" << 'COLORS'
-[ColorEffects:Disabled]
-Color=112,110,125
-ColorAmount=0
-ColorEffect=0
-ContrastAmount=0.65
-ContrastEffect=1
-IntensityAmount=0.1
-IntensityEffect=2
-
-[ColorEffects:Inactive]
-ChangeSelectionColor=true
-Color=112,110,125
-ColorAmount=0.025
-ColorEffect=2
-ContrastAmount=0.1
-ContrastEffect=2
-Enable=false
-IntensityAmount=0
-IntensityEffect=0
-
-[Colors:Button]
-BackgroundAlternate=39,37,60
-BackgroundNormal=31,29,46
-DecorationFocus=235,188,186
-DecorationHover=235,111,146
-ForegroundActive=235,188,186
-ForegroundInactive=110,106,134
-ForegroundLink=156,207,216
-ForegroundNegative=235,111,146
-ForegroundNeutral=246,193,119
-ForegroundNormal=224,222,244
-ForegroundPositive=49,116,143
-ForegroundVisited=196,167,231
-
-[Colors:Complementary]
-BackgroundAlternate=39,37,60
-BackgroundNormal=25,23,36
-DecorationFocus=235,188,186
-DecorationHover=235,111,146
-ForegroundActive=235,188,186
-ForegroundInactive=110,106,134
-ForegroundLink=156,207,216
-ForegroundNegative=235,111,146
-ForegroundNeutral=246,193,119
-ForegroundNormal=224,222,244
-ForegroundPositive=49,116,143
-ForegroundVisited=196,167,231
-
-[Colors:Header]
-BackgroundAlternate=31,29,46
-BackgroundNormal=25,23,36
-DecorationFocus=235,188,186
-DecorationHover=235,111,146
-ForegroundActive=235,188,186
-ForegroundInactive=110,106,134
-ForegroundLink=156,207,216
-ForegroundNegative=235,111,146
-ForegroundNeutral=246,193,119
-ForegroundNormal=224,222,244
-ForegroundPositive=49,116,143
-ForegroundVisited=196,167,231
-
-[Colors:Selection]
-BackgroundAlternate=235,111,146
-BackgroundNormal=235,111,146
-DecorationFocus=235,188,186
-DecorationHover=235,111,146
-ForegroundActive=224,222,244
-ForegroundInactive=110,106,134
-ForegroundLink=156,207,216
-ForegroundNegative=235,111,146
-ForegroundNeutral=246,193,119
-ForegroundNormal=25,23,36
-ForegroundPositive=49,116,143
-ForegroundVisited=196,167,231
-
-[Colors:Tooltip]
-BackgroundAlternate=31,29,46
-BackgroundNormal=25,23,36
-DecorationFocus=235,188,186
-DecorationHover=235,111,146
-ForegroundActive=235,188,186
-ForegroundInactive=110,106,134
-ForegroundLink=156,207,216
-ForegroundNegative=235,111,146
-ForegroundNeutral=246,193,119
-ForegroundNormal=224,222,244
-ForegroundPositive=49,116,143
-ForegroundVisited=196,167,231
-
-[Colors:View]
-BackgroundAlternate=25,23,36
-BackgroundNormal=31,29,46
-DecorationFocus=235,188,186
-DecorationHover=235,111,146
-ForegroundActive=235,188,186
-ForegroundInactive=110,106,134
-ForegroundLink=156,207,216
-ForegroundNegative=235,111,146
-ForegroundNeutral=246,193,119
-ForegroundNormal=224,222,244
-ForegroundPositive=49,116,143
-ForegroundVisited=196,167,231
-
-[Colors:Window]
-BackgroundAlternate=31,29,46
-BackgroundNormal=25,23,36
-DecorationFocus=235,188,186
-DecorationHover=235,111,146
-ForegroundActive=235,188,186
-ForegroundInactive=110,106,134
-ForegroundLink=156,207,216
-ForegroundNegative=235,111,146
-ForegroundNeutral=246,193,119
-ForegroundNormal=224,222,244
-ForegroundPositive=49,116,143
-ForegroundVisited=196,167,231
-
-[General]
-ColorScheme=RosePine
-Name=Rosé Pine
-shadeSortColumn=true
-
-[KDE]
-contrast=4
-COLORS
-
-plasma-apply-colorscheme RosePine 2>/dev/null \
-  || kw6 --file kdeglobals --group General --key ColorScheme RosePine
-ok "color scheme applied"
+mkdir -p "$HOME/.config/environment.d"
+cat > "$HOME/.config/environment.d/niri.conf" << 'ENV'
+MOZ_ENABLE_WAYLAND=1
+ELECTRON_OZONE_PLATFORM_HINT=wayland
+QT_QPA_PLATFORM=wayland;xcb
+QT_QPA_PLATFORMTHEME=gtk3
+SDL_VIDEODRIVER=wayland
+CLUTTER_BACKEND=wayland
+XDG_CURRENT_DESKTOP=niri
+XDG_SESSION_TYPE=wayland
+NIXOS_OZONE_WL=1
+ENV
+ok "environment set"
 
 # ══════════════════════════════════════════════════════════════════════════════
-h "Plasma shell theme"
+h "wallpapers"
 # ══════════════════════════════════════════════════════════════════════════════
 
-plasma-apply-desktoptheme breeze-dark 2>/dev/null \
-  || kw6 --file plasmarc --group Theme --key name breeze-dark
-ok "plasma theme: breeze-dark"
+WALL_DIR="$HOME/.local/share/wallpapers/rice"
+mkdir -p "$WALL_DIR"
+REPO_WALLS="$REPO_DIR/wallpapers"
+if [[ -d "$REPO_WALLS" ]]; then
+  find "$REPO_WALLS" -maxdepth 1 \
+    \( -iname "*.jpg" -o -iname "*.jpeg" -o -iname "*.png" -o -iname "*.webp" \) \
+    -exec cp -n {} "$WALL_DIR/" \;
+  ok "$(find "$WALL_DIR" -maxdepth 1 -type f | wc -l) wallpapers in $WALL_DIR"
+fi
+FIRST_WALL=$(find "$WALL_DIR" -maxdepth 1 -type f | sort | head -1)
 
 # ══════════════════════════════════════════════════════════════════════════════
-h "Kvantum"
+h "niri config"
 # ══════════════════════════════════════════════════════════════════════════════
 
-mkdir -p "$HOME/.config/Kvantum"
-# pick best available theme
-KVTHEME="KvArcDark"
-for t in Catppuccin-Mocha-Mauve catppuccin-mocha; do
-  [[ -d "$HOME/.local/share/Kvantum/$t" || -d "/usr/share/Kvantum/$t" ]] \
-    && KVTHEME="$t" && break
-done
-cat > "$HOME/.config/Kvantum/kvantum.kvconfig" << EOF
-[General]
-theme=$KVTHEME
-EOF
-kw6 --file qt5ct/qt5ct.conf --group Appearance --key style kvantum
-kw6 --file qt6ct/qt6ct.conf --group Appearance --key style kvantum
-ok "Kvantum: $KVTHEME"
+mkdir -p "$HOME/.config/niri"
+WALL_PATH="${FIRST_WALL:-$WALL_DIR/wallpaper.png}"
+
+cat > "$HOME/.config/niri/config.kdl" << NIRI
+// ─── input ────────────────────────────────────────────────────────────────────
+input {
+    keyboard {
+        xkb { layout "us" }
+        repeat-delay 300
+        repeat-rate 50
+    }
+    touchpad {
+        tap
+        dwt
+        natural-scroll
+        scroll-method "two-finger"
+        accel-speed 0.2
+        accel-profile "adaptive"
+    }
+    mouse {
+        accel-speed 0.0
+        accel-profile "flat"
+    }
+    focus-follows-mouse max-scroll-amount="0%"
+}
+
+// ─── layout ───────────────────────────────────────────────────────────────────
+layout {
+    gaps 12
+    preset-column-widths {
+        proportion 0.33333
+        proportion 0.5
+        proportion 0.66667
+        proportion 1.0
+    }
+    default-column-width { proportion 0.5; }
+    focus-ring {
+        width 2
+        active-color "#eb6f92"
+        inactive-color "#26233a"
+    }
+    border { off }
+    struts { top 32 }
+}
+
+// ─── look ─────────────────────────────────────────────────────────────────────
+prefer-no-csd
+
+cursor {
+    theme "bibata-modern-classic"
+    size 24
+}
+
+screenshot-path "~/Pictures/Screenshots/Screenshot_%Y-%m-%d_%H-%M-%S.png"
+
+hotkey-overlay { skip-at-startup }
+
+window-rule {
+    geometry-corner-radius 8
+    clip-to-geometry true
+}
+
+animations { slowdown 0.7 }
+
+// ─── startup ──────────────────────────────────────────────────────────────────
+spawn-at-startup "quickshell"
+spawn-at-startup "mako"
+spawn-at-startup "nm-applet" "--indicator"
+spawn-at-startup "swaybg" "-m" "fill" "-i" "${WALL_PATH}"
+
+// ─── binds ────────────────────────────────────────────────────────────────────
+binds {
+    Mod+Return        { spawn "ghostty"; }
+    Mod+D             { spawn "fuzzel"; }
+    Mod+E             { spawn "dolphin"; }
+    Mod+B             { spawn "vivaldi-stable"; }
+    Mod+L             { spawn "swaylock" "-f" "-c" "191724"; }
+
+    Print             { screenshot; }
+    Mod+Shift+S       { screenshot; }
+    Mod+S             { screenshot-screen; }
+
+    Mod+Q             { close-window; }
+    Mod+F             { maximize-column; }
+    Mod+Shift+F       { fullscreen-window; }
+    Mod+C             { center-column; }
+    Mod+R             { switch-preset-column-width; }
+    Mod+Shift+R       { reset-window-height; }
+
+    Mod+H             { focus-column-left; }
+    Mod+J             { focus-window-down; }
+    Mod+K             { focus-window-up; }
+    Mod+L             { focus-column-right; }
+    Mod+Left          { focus-column-left; }
+    Mod+Right         { focus-column-right; }
+    Mod+Up            { focus-window-up; }
+    Mod+Down          { focus-window-down; }
+
+    Mod+Shift+H       { move-column-left; }
+    Mod+Shift+J       { move-window-down; }
+    Mod+Shift+K       { move-window-up; }
+    Mod+Shift+L       { move-column-right; }
+    Mod+Shift+Left    { move-column-left; }
+    Mod+Shift+Right   { move-column-right; }
+    Mod+Shift+Up      { move-window-up; }
+    Mod+Shift+Down    { move-window-down; }
+
+    Mod+1             { focus-workspace 1; }
+    Mod+2             { focus-workspace 2; }
+    Mod+3             { focus-workspace 3; }
+    Mod+4             { focus-workspace 4; }
+    Mod+5             { focus-workspace 5; }
+    Mod+Shift+1       { move-window-to-workspace 1; }
+    Mod+Shift+2       { move-window-to-workspace 2; }
+    Mod+Shift+3       { move-window-to-workspace 3; }
+    Mod+Shift+4       { move-window-to-workspace 4; }
+    Mod+Shift+5       { move-window-to-workspace 5; }
+    Mod+Tab           { focus-workspace-previous; }
+    Mod+Page_Down     { focus-workspace-down; }
+    Mod+Page_Up       { focus-workspace-up; }
+
+    Mod+Minus         { set-column-width "-10%"; }
+    Mod+Equal         { set-column-width "+10%"; }
+    Mod+Shift+Minus   { set-window-height "-10%"; }
+    Mod+Shift+Equal   { set-window-height "+10%"; }
+
+    Mod+WheelScrollDown cooldown-ms=150 { focus-workspace-down; }
+    Mod+WheelScrollUp   cooldown-ms=150 { focus-workspace-up; }
+
+    Mod+Shift+E       { quit; }
+    Mod+Shift+P       { power-off-monitors; }
+
+    XF86AudioRaiseVolume  allow-when-locked=true { spawn "wpctl" "set-volume" "@DEFAULT_AUDIO_SINK@" "0.1+"; }
+    XF86AudioLowerVolume  allow-when-locked=true { spawn "wpctl" "set-volume" "@DEFAULT_AUDIO_SINK@" "0.1-"; }
+    XF86AudioMute         allow-when-locked=true { spawn "wpctl" "set-mute"   "@DEFAULT_AUDIO_SINK@" "toggle"; }
+    XF86AudioMicMute      allow-when-locked=true { spawn "wpctl" "set-mute"   "@DEFAULT_AUDIO_SOURCE@" "toggle"; }
+    XF86MonBrightnessUp   allow-when-locked=true { spawn "brightnessctl" "set" "10%+"; }
+    XF86MonBrightnessDown allow-when-locked=true { spawn "brightnessctl" "set" "10%-"; }
+}
+NIRI
+ok "niri config written"
 
 # ══════════════════════════════════════════════════════════════════════════════
-h "icons · cursor"
+h "quickshell"
 # ══════════════════════════════════════════════════════════════════════════════
 
-papirus-folders -C pink --theme Papirus-Dark 2>/dev/null || true
-kw6 --file kdeglobals --group Icons --key Theme Papirus-Dark
-kw6 --file kcminputrc  --group Mouse --key cursorTheme bibata-modern-classic
-kw6 --file kdeglobals  --group Icons --key cursorTheme bibata-modern-classic
-mkdir -p "$HOME/.icons/default"
-cat > "$HOME/.icons/default/index.theme" << 'EOF'
+mkdir -p "$HOME/.config/quickshell"
+
+cat > "$HOME/.config/quickshell/shell.qml" << 'QML'
+pragma Singleton
+pragma ComponentBehavior: Bound
+
+import Quickshell
+import Quickshell.Wayland
+import Quickshell.Services.UPower
+import Quickshell.SystemTray
+import Quickshell.Io
+import QtQuick
+import QtQuick.Layouts
+
+ShellRoot {
+    id: root
+
+    // ── Rosé Pine ─────────────────────────────────────────────────────────────
+    readonly property color base:     "#191724"
+    readonly property color surface:  "#1f1d2e"
+    readonly property color overlay:  "#26233a"
+    readonly property color muted:    "#6e6a86"
+    readonly property color subtle:   "#908caa"
+    readonly property color text:     "#e0def4"
+    readonly property color love:     "#eb6f92"
+    readonly property color gold:     "#f6c177"
+    readonly property color foam:     "#9ccfd8"
+
+    // ── niri workspaces (poll via niri msg) ───────────────────────────────────
+    property var workspaces: []
+
+    Process {
+        id: wsProc
+        command: ["niri", "msg", "--json", "workspaces"]
+        stdout: SplitParser {
+            onRead: data => {
+                try { root.workspaces = JSON.parse(data) } catch (_) {}
+            }
+        }
+        onExited: running = false
+    }
+
+    Timer {
+        interval: 1500; running: true; repeat: true; triggeredOnStart: true
+        onTriggered: if (!wsProc.running) wsProc.running = true
+    }
+
+    // ── volume via wpctl ──────────────────────────────────────────────────────
+    property real  vol: 0
+    property bool  mute: false
+
+    Process {
+        id: volProc
+        command: ["bash", "-c", "wpctl get-volume @DEFAULT_AUDIO_SINK@"]
+        stdout: SplitParser {
+            onRead: data => {
+                const m = data.match(/Volume:\s+([\d.]+)(\s+\[MUTED\])?/)
+                if (m) { root.vol = parseFloat(m[1]); root.mute = !!m[2] }
+            }
+        }
+        onExited: running = false
+    }
+
+    Timer {
+        interval: 2000; running: true; repeat: true; triggeredOnStart: true
+        onTriggered: if (!volProc.running) volProc.running = true
+    }
+
+    // ── bar — one per screen ──────────────────────────────────────────────────
+    Variants {
+        model: Quickshell.screens
+
+        PanelWindow {
+            id: bar
+            required property var modelData
+            screen: modelData
+            anchors { top: true; left: true; right: true }
+            implicitHeight: 32
+            color: "transparent"
+            WlrLayershell.namespace: "qs-bar"
+            WlrLayershell.exclusiveZone: 32
+
+            Rectangle {
+                anchors.fill: parent
+                color: Qt.rgba(0.098, 0.090, 0.141, 0.94)   // base #191724
+
+                RowLayout {
+                    anchors { fill: parent; leftMargin: 10; rightMargin: 10 }
+                    spacing: 0
+
+                    // workspaces
+                    Row {
+                        spacing: 8
+                        Layout.alignment: Qt.AlignVCenter
+
+                        Repeater {
+                            model: root.workspaces
+                            Text {
+                                required property var modelData
+                                text: modelData.is_focused ? "●" : "○"
+                                color: modelData.is_focused ? root.love : root.overlay
+                                font { pixelSize: 11; family: "Noto Sans" }
+                                verticalAlignment: Text.AlignVCenter
+                            }
+                        }
+                    }
+
+                    Item { Layout.fillWidth: true }
+
+                    // clock
+                    Text {
+                        text: Qt.formatDateTime(SystemClock.time, "hh:mm   yyyy-MM-dd")
+                        color: root.text
+                        font { pixelSize: 13; family: "Noto Sans"; weight: Font.Medium }
+                        Layout.alignment: Qt.AlignVCenter
+                    }
+
+                    Item { Layout.fillWidth: true }
+
+                    // volume
+                    Row {
+                        spacing: 5
+                        Layout.alignment: Qt.AlignVCenter
+                        Layout.rightMargin: 14
+
+                        Text {
+                            text: root.mute ? "󰖁" : (root.vol > 0.6 ? "󰕾" : root.vol > 0.2 ? "󰖀" : "󰕿")
+                            color: root.mute ? root.muted : root.subtle
+                            font { pixelSize: 14; family: "JetBrainsMono Nerd Font" }
+                            verticalAlignment: Text.AlignVCenter
+                        }
+                        Text {
+                            text: root.mute ? "mute" : `${Math.round(root.vol * 100)}%`
+                            color: root.subtle
+                            font { pixelSize: 12; family: "Noto Sans" }
+                            verticalAlignment: Text.AlignVCenter
+                        }
+                    }
+
+                    // battery
+                    Repeater {
+                        model: UPower.devices.values.filter(d => d.isLaptopBattery)
+
+                        Row {
+                            required property var modelData
+                            spacing: 5
+                            Layout.alignment: Qt.AlignVCenter
+                            Layout.rightMargin: 14
+
+                            Text {
+                                text: {
+                                    if (modelData.state === UPowerDeviceState.Charging) return "⚡"
+                                    const p = modelData.percentage
+                                    if (p > 0.85) return "󰁹"
+                                    if (p > 0.6)  return "󰂁"
+                                    if (p > 0.4)  return "󰁿"
+                                    if (p > 0.2)  return "󰁽"
+                                    return "󰁺"
+                                }
+                                color: {
+                                    const p = modelData.percentage
+                                    if (p < 0.15) return root.love
+                                    if (p < 0.3)  return root.gold
+                                    return root.subtle
+                                }
+                                font { pixelSize: 14; family: "JetBrainsMono Nerd Font" }
+                                verticalAlignment: Text.AlignVCenter
+                            }
+                            Text {
+                                text: `${Math.round(modelData.percentage * 100)}%`
+                                color: root.subtle
+                                font { pixelSize: 12; family: "Noto Sans" }
+                                verticalAlignment: Text.AlignVCenter
+                            }
+                        }
+                    }
+
+                    // system tray
+                    Row {
+                        spacing: 6
+                        Layout.alignment: Qt.AlignVCenter
+
+                        Repeater {
+                            model: SystemTray.items.values
+
+                            Item {
+                                required property var modelData
+                                width: 18; height: 18
+
+                                Image {
+                                    anchors.fill: parent
+                                    source: modelData.icon
+                                    fillMode: Image.PreserveAspectFit
+                                    smooth: true
+                                }
+                                MouseArea {
+                                    anchors.fill: parent
+                                    acceptedButtons: Qt.LeftButton | Qt.RightButton
+                                    onClicked: mouse => mouse.button === Qt.LeftButton
+                                        ? modelData.activate()
+                                        : modelData.secondaryActivate()
+                                }
+                            }
+                        }
+                    }
+
+                } // RowLayout
+            } // Rectangle
+        } // PanelWindow
+    } // Variants
+} // ShellRoot
+QML
+ok "quickshell shell.qml written"
+
+# ══════════════════════════════════════════════════════════════════════════════
+h "fuzzel"
+# ══════════════════════════════════════════════════════════════════════════════
+
+mkdir -p "$HOME/.config/fuzzel"
+cat > "$HOME/.config/fuzzel/fuzzel.ini" << 'FUZZEL'
+[main]
+font=Noto Sans:size=13
+dpi-aware=no
+width=35
+lines=8
+tabs=4
+horizontal-pad=20
+vertical-pad=12
+inner-pad=8
+anchor=center
+layer=overlay
+
+[colors]
+background=191724ff
+text=e0def4ff
+match=eb6f92ff
+selection=26233aff
+selection-text=e0def4ff
+selection-match=eb6f92ff
+border=26233aff
+
+[border]
+width=1
+radius=8
+
+[dmenu]
+exit-immediately-if-empty=yes
+FUZZEL
+ok "fuzzel configured"
+
+# ══════════════════════════════════════════════════════════════════════════════
+h "mako"
+# ══════════════════════════════════════════════════════════════════════════════
+
+mkdir -p "$HOME/.config/mako"
+cat > "$HOME/.config/mako/config" << 'MAKO'
+sort=-time
+layer=overlay
+background-color=#1f1d2e
+text-color=#e0def4
+width=360
+height=120
+border-size=1
+border-color=#26233a
+border-radius=8
+icons=1
+icon-location=left
+max-icon-size=48
+default-timeout=5000
+font=Noto Sans 13
+margin=12
+padding=12,16
+
+[urgency=high]
+border-color=#eb6f92
+default-timeout=0
+MAKO
+ok "mako configured"
+
+# ══════════════════════════════════════════════════════════════════════════════
+h "swaylock"
+# ══════════════════════════════════════════════════════════════════════════════
+
+mkdir -p "$HOME/.config/swaylock"
+cat > "$HOME/.config/swaylock/config" << 'SWAYLOCK'
+color=191724
+inside-color=191724
+ring-color=26233a
+ring-clear-color=9ccfd8
+ring-ver-color=31748f
+ring-wrong-color=eb6f92
+key-hl-color=eb6f92
+bs-hl-color=f6c177
+text-color=e0def4
+text-wrong-color=eb6f92
+indicator-radius=80
+indicator-thickness=8
+font=Noto Sans
+SWAYLOCK
+ok "swaylock configured"
+
+# ══════════════════════════════════════════════════════════════════════════════
+h "GTK + cursor + fonts"
+# ══════════════════════════════════════════════════════════════════════════════
+
+mkdir -p "$HOME/.config/gtk-3.0" "$HOME/.config/gtk-4.0" "$HOME/.icons/default"
+
+cat > "$HOME/.config/gtk-3.0/settings.ini" << 'GTK3'
+[Settings]
+gtk-theme-name=rose-pine
+gtk-icon-theme-name=Papirus-Dark
+gtk-cursor-theme-name=bibata-modern-classic
+gtk-font-name=Noto Sans 11
+gtk-application-prefer-dark-theme=1
+GTK3
+
+cat > "$HOME/.config/gtk-4.0/settings.ini" << 'GTK4'
+[Settings]
+gtk-theme-name=rose-pine
+gtk-icon-theme-name=Papirus-Dark
+gtk-cursor-theme-name=bibata-modern-classic
+gtk-font-name=Noto Sans 11
+gtk-application-prefer-dark-theme=1
+GTK4
+
+cat > "$HOME/.icons/default/index.theme" << 'CURSOR'
 [Icon Theme]
 Name=Default
 Inherits=bibata-modern-classic
-EOF
-ok "icons: Papirus-Dark · cursor: bibata-modern-classic"
+CURSOR
+
+grep -q 'Xcursor.theme' "$HOME/.Xresources" 2>/dev/null || \
+  printf 'Xcursor.theme: bibata-modern-classic\nXcursor.size: 24\n' >> "$HOME/.Xresources"
+
+mkdir -p "$HOME/.config/fontconfig"
+cat > "$HOME/.config/fontconfig/fonts.conf" << 'FONTCONF'
+<?xml version="1.0"?><!DOCTYPE fontconfig SYSTEM "fonts.dtd">
+<fontconfig>
+  <match target="font">
+    <edit name="rgba"      mode="assign"><const>rgb</const></edit>
+    <edit name="hinting"   mode="assign"><bool>true</bool></edit>
+    <edit name="hintstyle" mode="assign"><const>hintslight</const></edit>
+    <edit name="antialias" mode="assign"><bool>true</bool></edit>
+    <edit name="lcdfilter" mode="assign"><const>lcddefault</const></edit>
+  </match>
+  <alias><family>monospace</family>
+    <prefer><family>JetBrainsMono Nerd Font</family></prefer></alias>
+  <alias><family>sans-serif</family>
+    <prefer><family>Noto Sans</family></prefer></alias>
+</fontconfig>
+FONTCONF
+
+fc-cache -fv &>/dev/null
+ok "GTK, cursor, fonts configured"
 
 # ══════════════════════════════════════════════════════════════════════════════
-h "window decorations — Klassy"
+h "power"
 # ══════════════════════════════════════════════════════════════════════════════
 
-kw6 --file kwinrc --group org.kde.kdecoration2 --key library   org.kde.klassy
-kw6 --file kwinrc --group org.kde.kdecoration2 --key theme     ''
-kw6 --file kwinrc --group Windows              --key BorderlessMaximizedWindows true
-kw6 --file klassyrc --group Windeco --key cornerRadius          6
-kw6 --file klassyrc --group Windeco --key buttonSize            Small
-kw6 --file klassyrc --group Windeco --key titlebarTopMargin     2
-kw6 --file klassyrc --group Windeco --key titlebarBottomMargin  2
-kw6 --file klassyrc --group Windeco --key titlebarSideMargin    6
-ok "Klassy decorations configured"
-
-# ══════════════════════════════════════════════════════════════════════════════
-h "KWin effects"
-# ══════════════════════════════════════════════════════════════════════════════
-
-kw6 --file kwinrc --group Compositing --key Backend             OpenGL
-kw6 --file kwinrc --group Compositing --key GLTextureFilter     2
-kw6 --file kwinrc --group Compositing --key LatencyControl      0
-kw6 --file kwinrc --group Compositing --key AnimationSpeed      4
-kw6 --file kwinrc --group Compositing --key WindowCornerRadius  7
-kw6 --file kwinrc --group Plugins     --key blurEnabled         true
-kw6 --file kwinrc --group Effect-blur --key BlurStrength        7
-kw6 --file kwinrc --group Effect-blur --key NoiseStrength       0
-kw6 --file kwinrc --group Plugins     --key overviewEnabled     true
-kw6 --file kwinrc --group Plugins     --key desktopgridEnabled  false
-kw6 --file kwinrc --group Plugins     --key zoomEnabled         false
-kw6 --file kwinrc --group Plugins     --key wobblywindowsEnabled false
-# Meta key → Overview (like GNOME Super)
-kw6 --file kwinrc --group ModifierOnlyShortcuts --key Meta \
-  'org.kde.kglobalaccel,/component/kwin,,invokeShortcut,Overview'
-# Electric borders — edges only, corners disabled (no accidental triggers on laptop)
-kw6 --file kwinrc --group Windows        --key ElectricBorderTiling      true
-kw6 --file kwinrc --group Windows        --key ElectricBorderCornerRatio 0.0
-kw6 --file kwinrc --group ElectricBorders --key TopLeft     None
-kw6 --file kwinrc --group ElectricBorders --key TopRight    None
-kw6 --file kwinrc --group ElectricBorders --key BottomLeft  None
-kw6 --file kwinrc --group ElectricBorders --key BottomRight None
-kw6 --file kwinrc --group ElectricBorders --key Top         None
-kw6 --file kwinrc --group ElectricBorders --key Bottom      None
-kw6 --file kwinrc --group ElectricBorders --key Left        None
-kw6 --file kwinrc --group ElectricBorders --key Right       None
-ok "KWin effects configured"
-
-# ══════════════════════════════════════════════════════════════════════════════
-h "fonts"
-# ══════════════════════════════════════════════════════════════════════════════
-
-kw6 --file kdeglobals --group General --key font        'Noto Sans,10,-1,5,400,0,0,0,0,0,0,0,0,0,0,1'
-kw6 --file kdeglobals --group General --key fixed       'JetBrainsMono Nerd Font,12,-1,5,400,0,0,0,0,0,0,0,0,0,0,1'
-kw6 --file kcmfonts   --group General --key antiAliasing  1
-kw6 --file kcmfonts   --group General --key subPixelType  rgb
-kw6 --file kcmfonts   --group General --key hintingStyle  slight
-ok "font rendering configured"
-
-# ══════════════════════════════════════════════════════════════════════════════
-h "GTK"
-# ══════════════════════════════════════════════════════════════════════════════
-
-mkdir -p "$HOME/.config/gtk-3.0" "$HOME/.config/gtk-4.0"
-cat > "$HOME/.config/gtk-3.0/settings.ini" << 'GTK3'
-[Settings]
-gtk-theme-name                  = Breeze-Dark
-gtk-icon-theme-name             = Papirus-Dark
-gtk-cursor-theme-name           = bibata-modern-classic
-gtk-font-name                   = Noto Sans 10
-gtk-application-prefer-dark-theme = 1
-GTK3
-cat > "$HOME/.config/gtk-4.0/settings.ini" << 'GTK4'
-[Settings]
-gtk-theme-name                  = Breeze-Dark
-gtk-icon-theme-name             = Papirus-Dark
-gtk-cursor-theme-name           = bibata-modern-classic
-gtk-font-name                   = Noto Sans 10
-gtk-application-prefer-dark-theme = 1
-GTK4
-ok "GTK configured"
-
-# ══════════════════════════════════════════════════════════════════════════════
-h "KDE settings"
-# ══════════════════════════════════════════════════════════════════════════════
-
-# general behaviour
-kw6 --file kdeglobals --group KDE     --key SingleClick                false
-kw6 --file kdeglobals --group General --key AccentColor                '235,111,146'
-kw6 --file kdeglobals --group General --key accentColorFromWallpaper   false
-
-# splash / startup
-kw6 --file ksplashrc  --group KSplash --key Engine  none
-kw6 --file ksplashrc  --group KSplash --key Theme   none
-kw6 --file klaunchrc  --group BusyCursorSettings --key Bouncing  false
-kw6 --file klaunchrc  --group FeedbackStyle      --key BusyCursor false
-
-# screen lock — disabled (always on charger, always present)
-kw6 --file kscreenlockerrc --group Daemon --key Autolock false
-kw6 --file kscreenlockerrc --group Daemon --key Timeout  0
-
-# baloo — disable file indexer
-balooctl6 disable 2>/dev/null || balooctl disable 2>/dev/null || true
-kw6 --file baloofilerc --group 'Basic Settings' --key Indexing-Enabled false
-
-# task switcher
-kw6 --file kwinrc --group TabBox --key LayoutName thumbnail_grid
-
-# KRunner — free floating
-kw6 --file krunnerrc --group General --key FreeFloating true
-
-# notifications — no interruptions during fullscreen (gaming/coding)
-kw6 --file plasmanotifyrc --group Notifications --key InhibitNotificationsWhenScreensMirrored true
-
-# clipboard history
-kw6 --file klipperrc --group General --key MaxClipItems       30
-kw6 --file klipperrc --group General --key KeepClipboardContents true
-
-# input — laptop-friendly defaults
-kw6 --file kcminputrc --group Libinput --key NaturalScroll  true
-kw6 --file kcminputrc --group Libinput --key TapToClick     true
-kw6 --file kcminputrc --group Libinput --key TwoFingerTap   true
-kw6 --file kcminputrc --group Libinput --key ScrollMethod   2
-
-# power management — reasonable defaults
 cat > "$HOME/.config/powermanagementprofilesrc" << 'POWER'
 [AC][BrightnessControl]
 value=100
@@ -387,299 +630,15 @@ idleTime=300000
 suspendThenHibernate=true
 suspendType=1
 POWER
-
-ok "KDE settings applied"
-
-# ══════════════════════════════════════════════════════════════════════════════
-h "panels — top bar + bottom dock"
-# ══════════════════════════════════════════════════════════════════════════════
-
-# suspend exit-on-error for the panel section — config failures shouldn't
-# abort the whole rice; panels can be fixed manually
-set +e
-
-APPLETSRC="$HOME/.config/plasma-org.kde.plasma.desktop-appletsrc"
-SHELLRC="$HOME/.config/plasmashellrc"
-
-[[ -f "$APPLETSRC" ]] && cp "$APPLETSRC" "${APPLETSRC}.bak"
-[[ -f "$SHELLRC"   ]] && cp "$SHELLRC"   "${SHELLRC}.bak"
-
-# preserve current desktop activity id
-ACTIVITY_ID=$(python3 -c "
-import configparser, sys, os
-path = '${APPLETSRC}'
-if not os.path.exists(path): print(''); exit()
-cfg = configparser.RawConfigParser()
-cfg.read(path)
-for s in cfg.sections():
-    if cfg.has_option(s,'plugin') and cfg.get(s,'plugin')=='org.kde.desktopcontainment':
-        print(cfg.get(s,'activityId',fallback='')); exit()
-" 2>/dev/null || echo '')
-ACTIVITY_ID="${ACTIVITY_ID:-00000000-0000-0000-0000-000000000000}"
-
-# ── discover installed .desktop files for dock ────────────────────────────────
-_find_desktop() {
-  for c in "$@"; do
-    for d in "$HOME/.local/share/applications" /usr/share/applications /usr/local/share/applications; do
-      [[ -f "$d/$c" ]] && echo "applications:$c" && return
-    done
-  done
-}
-
-LAUNCHERS=()
-_add() { local r; r=$(_find_desktop "$@") && [[ -n "$r" ]] && LAUNCHERS+=("$r") || true; }
-
-_add com.mitchellh.ghostty.desktop ghostty.desktop
-_add vivaldi-stable.desktop vivaldi.desktop
-_add librewolf.desktop librewolf-bin.desktop
-_add signal-desktop.desktop signal.desktop
-_add discord.desktop Discord.desktop
-_add discord-canary.desktop
-_add slack-desktop.desktop slack.desktop
-_add rocketchat-desktop.desktop rocketchat.desktop
-_add code.desktop visual-studio-code.desktop
-_add dev.zed.Zed.desktop zed.desktop
-_add jetbrains-toolbox.desktop
-_add 1password.desktop _1password.desktop
-_add thunderbird.desktop mozilla-thunderbird.desktop
-_add gitbutler-bin.desktop gitbutler.desktop
-_add linear.desktop linear-app.desktop
-_add spotify.desktop com.spotify.Client.desktop
-_add steam.desktop
-_add org.prismlauncher.PrismLauncher.desktop prismlauncher.desktop
-_add docker-desktop.desktop
-_add openlens.desktop OpenLens.desktop
-_add mongodb-compass.desktop
-_add dbeaver-ce.desktop dbeaver.desktop DBeaver.desktop
-_add redisinsight.desktop RedisInsight.desktop
-_add bruno.desktop
-_add com.obsproject.Studio.desktop obs.desktop
-_add org.kde.dolphin.desktop dolphin.desktop
-
-# safe join — handles empty array without nounset error
-LAUNCHER_STR=""
-if [[ ${#LAUNCHERS[@]} -gt 0 ]]; then
-  LAUNCHER_STR=$(printf '%s,' "${LAUNCHERS[@]}")
-  LAUNCHER_STR="${LAUNCHER_STR%,}"  # strip trailing comma
-fi
-
-log "dock: ${#LAUNCHERS[@]} apps found"
-
-# ── appletsrc — single panel, icons left, clock center, tray right ───────────
-cat > "$APPLETSRC" << APLRC
-[ActionPlugins][0]
-RightButton;NoModifier=org.kde.contextmenu
-
-[ActionPlugins][1]
-RightButton;NoModifier=org.kde.contextmenu
-
-[Containments][1]
-activityId=${ACTIVITY_ID}
-formfactor=0
-immutability=1
-lastScreen=0
-location=0
-plugin=org.kde.desktopcontainment
-wallpaperplugin=org.kde.image
-
-[Containments][2]
-activityId=
-formfactor=2
-immutability=1
-lastScreen=0
-location=3
-plugin=org.kde.panel
-wallpaperplugin=org.kde.image
-
-[Containments][2][Applets][10]
-immutability=1
-plugin=org.kde.plasma.kickoff
-
-[Containments][2][Applets][10][Configuration][Shortcuts]
-global=Meta+F1
-
-[Containments][2][Applets][10][Configuration][General]
-favoritesPortedToKAstats=true
-showRecentDocs=false
-showRecentApps=false
-
-[Containments][2][Applets][11]
-immutability=1
-plugin=org.kde.plasma.icontasks
-
-[Containments][2][Applets][11][Configuration][General]
-launchers=${LAUNCHER_STR}
-showOnlyCurrentScreen=false
-showOnlyCurrentDesktop=false
-showOnlyCurrentActivity=true
-
-[Containments][2][Applets][12]
-immutability=1
-plugin=org.kde.plasma.panelspacer
-
-[Containments][2][Applets][13]
-immutability=1
-plugin=org.kde.plasma.digitalclock
-
-[Containments][2][Applets][13][Configuration][Appearance]
-showDate=true
-showSeconds=Never
-use24hFormat=2
-dateFormat=isoDate
-fontStyleName=Regular
-
-[Containments][2][Applets][14]
-immutability=1
-plugin=org.kde.plasma.panelspacer
-
-[Containments][2][Applets][15]
-immutability=1
-plugin=org.kde.plasma.systemtray
-
-[Containments][2][Applets][15][Configuration][General]
-shownItems=org.kde.plasma.networkmanagement,org.kde.plasma.volume,org.kde.plasma.battery
-extraItems=org.kde.plasma.bluetooth
-
-[Containments][2][Configuration]
-PreloadWeight=100
-APLRC
-
-# ── plasmashellrc — single panel, thin, full-width ────────────────────────────
-python3 - << PYEOF
-import os
-
-path = os.path.expanduser('$SHELLRC')
-lines = []
-
-if os.path.exists(path):
-    with open(path) as f:
-        skip = False
-        for line in f:
-            if any(x in line for x in ['[PlasmaViews][Panel 2]', '[PlasmaViews][Panel 3]']):
-                skip = True
-            elif line.startswith('[') and skip:
-                skip = False
-            if not skip:
-                lines.append(line)
-
-lines.append('\n[PlasmaViews][Panel 2][Defaults]\n')
-lines.append('floating=0\n')
-lines.append('panelLengthMode=1\n')
-lines.append('panelVisibility=0\n')
-lines.append('thickness=36\n')
-
-with open(path, 'w') as f:
-    f.writelines(lines)
-print('plasmashellrc written')
-PYEOF
-
-ok "panels configured"
-set -e
+ok "power management configured"
 
 # ══════════════════════════════════════════════════════════════════════════════
-h "wallpapers"
-# ══════════════════════════════════════════════════════════════════════════════
-
-WALL_DIR="$HOME/.local/share/wallpapers/rice"
-REPO_WALLS="$REPO_DIR/wallpapers"
-mkdir -p "$WALL_DIR"
-
-if [[ -d "$REPO_WALLS" ]]; then
-  find "$REPO_WALLS" -maxdepth 1 \
-    \( -iname "*.jpg" -o -iname "*.jpeg" -o -iname "*.png" -o -iname "*.webp" \) \
-    -exec cp -n {} "$WALL_DIR/" \;
-  COUNT=$(find "$WALL_DIR" -maxdepth 1 -type f | wc -l)
-  ok "$COUNT wallpapers in $WALL_DIR"
-else
-  warn "wallpapers/ not found next to rice.sh"
-fi
-
-FIRST=$(find "$WALL_DIR" -maxdepth 1 -type f \
-  \( -iname "*.jpg" -o -iname "*.jpeg" -o -iname "*.png" -o -iname "*.webp" \) \
-  | sort | head -1)
-
-if [[ -n "$FIRST" ]]; then
-  plasma-apply-wallpaperimage "$FIRST" 2>/dev/null && ok "wallpaper applied: $(basename "$FIRST")" || true
-  qdbus6 org.kde.plasmashell /PlasmaShell \
-    org.kde.PlasmaShell.evaluateScript "
-      var ds = desktops();
-      for (var i = 0; i < ds.length; i++) {
-        ds[i].wallpaperPlugin = 'org.kde.slideshow';
-        ds[i].currentConfigGroup = ['Wallpaper','org.kde.slideshow','General'];
-        ds[i].writeConfig('SlidePaths', '$WALL_DIR');
-        ds[i].writeConfig('SlideInterval', 1800);
-        ds[i].writeConfig('Shuffle', true);
-      }
-    " 2>/dev/null && ok "slideshow configured (30 min, shuffled)" || true
-fi
-
-# ══════════════════════════════════════════════════════════════════════════════
-h "Ghostty theme"
-# ══════════════════════════════════════════════════════════════════════════════
-
-mkdir -p "$HOME/.config/ghostty/themes"
-cat > "$HOME/.config/ghostty/themes/rose-pine" << 'THEME'
-palette = 0=#191724
-palette = 1=#eb6f92
-palette = 2=#31748f
-palette = 3=#f6c177
-palette = 4=#9ccfd8
-palette = 5=#c4a7e7
-palette = 6=#ebbcba
-palette = 7=#e0def4
-palette = 8=#26233a
-palette = 9=#eb6f92
-palette = 10=#31748f
-palette = 11=#f6c177
-palette = 12=#9ccfd8
-palette = 13=#c4a7e7
-palette = 14=#ebbcba
-palette = 15=#e0def4
-background = 191724
-foreground = e0def4
-cursor-color = e0def4
-selection-background = 403d52
-selection-foreground = e0def4
-THEME
-ok "Ghostty theme written"
-
-# ══════════════════════════════════════════════════════════════════════════════
-h "reload"
-# ══════════════════════════════════════════════════════════════════════════════
-
-# verify klassy installed — fall back to Breeze if missing
-if ! pacman -Q klassy-bin &>/dev/null && ! pacman -Q klassy &>/dev/null; then
-  warn "Klassy not installed — falling back to Breeze decorations"
-  kw6 --file kwinrc --group org.kde.kdecoration2 --key library 'org.kde.breeze'
-  kw6 --file kwinrc --group org.kde.kdecoration2 --key theme   'Breeze'
-fi
-
-# restart KWin — reconfigure alone doesn't reload decoration plugins
-log "restarting KWin..."
-if [[ "${XDG_SESSION_TYPE:-}" == "wayland" ]]; then
-  nohup kwin_wayland --replace &>/dev/null & disown 2>/dev/null
-else
-  nohup kwin_x11 --replace &>/dev/null & disown 2>/dev/null
-fi
-sleep 2
-ok "KWin restarted"
-
-# restart plasmashell — picks up panel + color scheme changes
-log "restarting plasmashell..."
-kquitapp6 plasmashell 2>/dev/null || killall plasmashell 2>/dev/null || true
-sleep 1
-nohup plasmashell --replace &>/dev/null &
-disown
-sleep 3
-ok "plasmashell restarted"
-
 echo -e "\n${W}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${D}"
-echo -e "${G}  ✔  rice done${D}"
+echo -e "${G}  ✔  Niri rice done${D}"
 echo -e "${W}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${D}\n"
-echo -e "  ${C}top bar${D}     thin dark · full-width · 28px"
-echo -e "  ${C}dock${D}        floating pill · bottom · ${#LAUNCHERS[@]} apps pinned"
-echo -e "  ${C}colors${D}      Rosé Pine"
-echo -e "  ${C}meta key${D}    opens window overview"
-echo -e "  ${C}wallpaper${D}   slideshow from $WALL_DIR\n"
-echo -e "  if dock apps show ? icons: right-click an icon → Properties → change icon"
-echo -e "  to add/remove apps: right-click dock → Unlock → drag apps in/out\n"
+echo -e "  ${C}log in:${D}     select Niri from SDDM session menu"
+echo -e "  ${C}terminal:${D}   Mod+Return"
+echo -e "  ${C}launcher:${D}   Mod+D"
+echo -e "  ${C}close:${D}      Mod+Q"
+echo -e "  ${C}lock:${D}       Mod+L"
+echo -e "  ${C}quit niri:${D}  Mod+Shift+E\n"

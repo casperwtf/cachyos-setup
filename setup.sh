@@ -101,7 +101,9 @@ pi \
   fish starship zoxide fzf fd ripgrep bat eza tmux \
   ttf-jetbrains-mono-nerd noto-fonts noto-fonts-cjk noto-fonts-emoji \
   ttf-liberation ttf-dejavu otf-font-awesome \
-  kvantum qt5ct qt6ct \
+  # niri stack
+  waybar fuzzel mako swaylock grim slurp wl-clipboard \
+  swaybg xdg-desktop-portal-gnome libnotify brightnessctl \
   discord signal-desktop \
   git python python-pip python-virtualenv github-cli \
   docker docker-compose docker-buildx \
@@ -131,10 +133,10 @@ PCONF
 sudo rm -f /var/lib/pacman/db.lck 2>/dev/null || true
 
 aur asusctl
-aur catppuccin-kde-git
+aur niri-bin
+aur quickshell-git
 aur papirus-icon-theme
 aur bibata-cursor-theme
-aur klassy-bin
 aur vivaldi
 aur vivaldi-ffmpeg-codecs
 aur librewolf-bin
@@ -527,8 +529,6 @@ sudo systemctl enable cpupower.service 2>/dev/null || true
 echo 'options usbcore autosuspend=-1' | \
   sudo tee /etc/modprobe.d/disable-usb-autosuspend.conf >/dev/null
 
-kwriteconfig6 --file kscreenlockerrc --group Daemon --key Autolock false
-kwriteconfig6 --file kscreenlockerrc --group Daemon --key Timeout 0
 
 for dev in /sys/class/leds/*kbd*; do
   [[ -d "$dev" ]] && brightnessctl --device="$(basename "$dev")" set 100% &>/dev/null || true
