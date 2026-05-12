@@ -101,8 +101,7 @@ pi \
   fish starship zoxide fzf fd ripgrep bat eza tmux \
   ttf-jetbrains-mono-nerd noto-fonts noto-fonts-cjk noto-fonts-emoji \
   ttf-liberation ttf-dejavu otf-font-awesome \
-  # niri stack
-  waybar fuzzel mako swaylock grim slurp wl-clipboard \
+  fuzzel mako swaylock grim slurp wl-clipboard \
   swaybg xdg-desktop-portal-gnome libnotify brightnessctl \
   discord signal-desktop \
   git python python-pip python-virtualenv github-cli \
