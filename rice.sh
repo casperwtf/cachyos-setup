@@ -1,495 +1,684 @@
 #!/usr/bin/env bash
 # ══════════════════════════════════════════════════════════════════════════════
-#  rice.sh — Niri + Quickshell
-#  Rosé Pine · fuzzel · mako · swaylock
+#  setup.sh — CachyOS KDE game dev setup
+#  idempotent: safe to run multiple times
 # ══════════════════════════════════════════════════════════════════════════════
 set -euo pipefail
 
-G='\033[0;32m' Y='\033[1;33m' C='\033[0;36m' W='\033[1;37m' D='\033[0m'
-ok()  { echo -e "${G}✔${D} $*"; }
-warn(){ echo -e "${Y}⚠${D}  $*"; }
-h()   { echo -e "\n${W}━━━  $*  ━━━${D}"; }
+R='\033[0;31m' G='\033[0;32m' Y='\033[1;33m' C='\033[0;36m' W='\033[1;37m' D='\033[0m'
+log()  { echo -e "${C}→${D} $*"; }
+ok()   { echo -e "${G}✔${D} $*"; }
+warn() { echo -e "${Y}⚠${D}  $*"; }
+die()  { echo -e "${R}✖${D} $*" >&2; exit 1; }
+h()    { echo -e "\n${W}━━━  $*  ━━━${D}"; }
 
-[[ $EUID -eq 0 ]] && { echo "run as normal user"; exit 1; }
-REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-IN_NIRI=[[ "${XDG_CURRENT_DESKTOP:-}" == "niri" ]] && echo true || echo false
+pi() { sudo pacman -S --needed --noconfirm "$@" 2>&1 | grep -v 'up to date' || true; }
 
-# ══════════════════════════════════════════════════════════════════════════════
-h "packages"
-# ══════════════════════════════════════════════════════════════════════════════
-
-sudo pacman -S --needed --noconfirm \
-  fuzzel mako swaylock grim slurp wl-clipboard swaybg \
-  xdg-desktop-portal-gnome network-manager-applet \
-  papirus-icon-theme noto-fonts ttf-jetbrains-mono-nerd \
-  libnotify brightnessctl
-
-GIT_TERMINAL_PROMPT=0 PAGER=cat \
-  paru -S --needed --noconfirm niri-bin quickshell-git \
-  bibata-cursor-theme rose-pine-gtk-theme-full \
-  </dev/null 2>/dev/null || warn "some AUR packages skipped"
-
-ok "packages done"
-
-# ══════════════════════════════════════════════════════════════════════════════
-h "wallpapers"
-# ══════════════════════════════════════════════════════════════════════════════
-
-WALL_DIR="$HOME/.local/share/wallpapers/rice"
-mkdir -p "$WALL_DIR"
-[[ -d "$REPO_DIR/wallpapers" ]] && \
-  find "$REPO_DIR/wallpapers" -maxdepth 1 \
-    \( -iname "*.jpg" -o -iname "*.jpeg" -o -iname "*.png" -o -iname "*.webp" \) \
-    -exec cp -n {} "$WALL_DIR/" \;
-WALL=$(find "$WALL_DIR" -maxdepth 1 -type f | sort | head -1)
-WALL="${WALL:-}"
-ok "wallpapers: $(find "$WALL_DIR" -maxdepth 1 -type f | wc -l) files"
-
-# ══════════════════════════════════════════════════════════════════════════════
-h "niri config"
-# ══════════════════════════════════════════════════════════════════════════════
-
-mkdir -p "$HOME/.config/niri"
-SWAYBG_LINE=""
-[[ -n "$WALL" ]] && SWAYBG_LINE="spawn-at-startup \"swaybg\" \"-m\" \"fill\" \"-i\" \"${WALL}\""
-
-cat > "$HOME/.config/niri/config.kdl" << NIRI
-input {
-    keyboard {
-        xkb { layout "us" }
-        repeat-delay 300
-        repeat-rate 50
-    }
-    touchpad {
-        tap
-        dwt
-        natural-scroll
-        scroll-method "two-finger"
-        accel-speed 0.2
-        accel-profile "adaptive"
-    }
-    mouse {
-        accel-speed 0.0
-        accel-profile "flat"
-    }
-    focus-follows-mouse max-scroll-amount="0%"
-    warp-mouse-to-focus
+aur() {
+  local pkg="$1"
+  # pacman -Q not paru -Q — avoids paru initialization on every check
+  pacman -Q "$pkg" &>/dev/null && return 0
+  log "  $pkg"
+  GIT_TERMINAL_PROMPT=0 PAGER=cat LESS= EDITOR=true BAT_PAGER=cat \
+    timeout 300 paru -S --needed --noconfirm --nopgpfetch --skipreview \
+    "$pkg" </dev/null &>/dev/null \
+    && ok "  $pkg" \
+    || warn "  $pkg — skipped"
 }
 
-layout {
-    gaps 0
-    preset-column-widths {
-        proportion 0.33333
-        proportion 0.5
-        proportion 0.66667
-        proportion 1.0
-    }
-    default-column-width { proportion 0.5; }
-    focus-ring {
-        width 2
-        active-color "#eb6f92"
-        inactive-color "#26233a"
-    }
-    border { off }
-    struts { top 32 }
+svc_enable() {
+  local bin="$1" svc="$2"
+  if command -v "$bin" &>/dev/null; then
+    sudo systemctl enable "$svc" 2>/dev/null && ok "  $svc" || true
+  else
+    warn "  $svc skipped ($bin not installed)"
+  fi
 }
 
-prefer-no-csd
+[[ $EUID -eq 0 ]] && die "run as normal user"
+command -v pacman &>/dev/null || die "pacman not found"
 
-cursor {
-    theme "bibata-modern-classic"
-    size 24
-}
+clear
+echo -e "${W}"
+cat << 'EOF'
+  ╔══════════════════════════════════════╗
+  ║  CachyOS KDE · Game Dev Setup       ║
+  ╚══════════════════════════════════════╝
+EOF
+echo -e "${D}"
 
-screenshot-path "~/Pictures/Screenshots/Screenshot_%Y-%m-%d_%H-%M-%S.png"
-hotkey-overlay { skip-at-startup }
-
-window-rule {
-    geometry-corner-radius 8
-    clip-to-geometry true
-}
-
-// 1password — force float so the popup/quick-access window actually appears
-window-rule {
-    app-id r#"^1password$"#
-    open-floating true
-}
-
-// 1password quick access (separate popup window)
-window-rule {
-    title r#"^1Password —"#
-    open-floating true
-    default-column-width { fixed 400; }
-}
-
-animations { slowdown 0.7 }
-
-spawn-at-startup "quickshell"
-spawn-at-startup "mako"
-spawn-at-startup "nm-applet" "--indicator"
-${SWAYBG_LINE}
-
-binds {
-    Mod+Return        { spawn "ghostty"; }
-    Mod+D             { spawn "fuzzel"; }
-    Mod+E             { spawn "dolphin"; }
-    Mod+B             { spawn "vivaldi-stable"; }
-    Mod+Shift+L       { spawn "swaylock" "-f" "-c" "191724"; }
-
-    Print             { screenshot; }
-    Mod+Shift+S       { screenshot; }
-    Mod+S             { screenshot-screen; }
-
-    Mod+Q             { close-window; }
-    Mod+F             { maximize-column; }
-    Mod+Shift+F       { fullscreen-window; }
-    Mod+C             { center-column; }
-    Mod+R             { switch-preset-column-width; }
-    Mod+Shift+R       { reset-window-height; }
-
-    Mod+H             { focus-column-left; }
-    Mod+J             { focus-window-down; }
-    Mod+K             { focus-window-up; }
-    Mod+L             { focus-column-right; }
-    Mod+Left          { focus-column-left; }
-    Mod+Right         { focus-column-right; }
-    Mod+Up            { focus-window-up; }
-    Mod+Down          { focus-window-down; }
-
-    Mod+Shift+H       { move-column-left; }
-    Mod+Shift+J       { move-window-down; }
-    Mod+Shift+K       { move-window-up; }
-    Mod+Shift+L       { move-column-right; }
-
-    Mod+1             { focus-workspace 1; }
-    Mod+2             { focus-workspace 2; }
-    Mod+3             { focus-workspace 3; }
-    Mod+4             { focus-workspace 4; }
-    Mod+5             { focus-workspace 5; }
-    Mod+Shift+1       { move-window-to-workspace 1; }
-    Mod+Shift+2       { move-window-to-workspace 2; }
-    Mod+Shift+3       { move-window-to-workspace 3; }
-    Mod+Shift+4       { move-window-to-workspace 4; }
-    Mod+Shift+5       { move-window-to-workspace 5; }
-    Mod+Tab           { focus-workspace-previous; }
-    Mod+Page_Down     { focus-workspace-down; }
-    Mod+Page_Up       { focus-workspace-up; }
-
-    Mod+Minus         { set-column-width "-10%"; }
-    Mod+Equal         { set-column-width "+10%"; }
-    Mod+Shift+Minus   { set-window-height "-10%"; }
-    Mod+Shift+Equal   { set-window-height "+10%"; }
-
-    Mod+WheelScrollDown cooldown-ms=150 { focus-workspace-down; }
-    Mod+WheelScrollUp   cooldown-ms=150 { focus-workspace-up; }
-
-    Mod+Shift+E       { quit; }
-    Mod+Shift+P       { power-off-monitors; }
-
-    XF86AudioRaiseVolume  allow-when-locked=true { spawn "wpctl" "set-volume" "@DEFAULT_AUDIO_SINK@" "0.1+"; }
-    XF86AudioLowerVolume  allow-when-locked=true { spawn "wpctl" "set-volume" "@DEFAULT_AUDIO_SINK@" "0.1-"; }
-    XF86AudioMute         allow-when-locked=true { spawn "wpctl" "set-mute"   "@DEFAULT_AUDIO_SINK@" "toggle"; }
-    XF86AudioMicMute      allow-when-locked=true { spawn "wpctl" "set-mute"   "@DEFAULT_AUDIO_SOURCE@" "toggle"; }
-    XF86MonBrightnessUp   allow-when-locked=true { spawn "brightnessctl" "set" "10%+"; }
-    XF86MonBrightnessDown allow-when-locked=true { spawn "brightnessctl" "set" "10%-"; }
-}
-NIRI
-
-# validate config if niri is installed
-command -v niri &>/dev/null && \
-  niri validate --config "$HOME/.config/niri/config.kdl" 2>&1 | \
-  grep -v '^$' | head -5 || true
-
-ok "niri config written"
-
-# ══════════════════════════════════════════════════════════════════════════════
-h "quickshell"
-# ══════════════════════════════════════════════════════════════════════════════
-
-mkdir -p "$HOME/.config/quickshell"
-
-cat > "$HOME/.config/quickshell/shell.qml" << 'QML'
-// Rosé Pine bar for Niri
-pragma Singleton
-pragma ComponentBehavior: Bound
-
-import Quickshell
-import Quickshell.Wayland
-import Quickshell.Io
-import QtQuick
-import QtQuick.Layouts
-
-ShellRoot {
-    id: root
-
-    // palette
-    readonly property string colBase:    "#f0191724"
-    readonly property string colText:    "#e0def4"
-    readonly property string colSubtle:  "#908caa"
-    readonly property string colMuted:   "#6e6a86"
-    readonly property string colOverlay: "#26233a"
-    readonly property string colLove:    "#eb6f92"
-    readonly property string colGold:    "#f6c177"
-
-    // clock
-    property var now: new Date()
-    Timer {
-        interval: 10000; running: true; repeat: true; triggeredOnStart: true
-        onTriggered: root.now = new Date()
-    }
-
-    // niri workspaces
-    property var workspaces: []
-    Process {
-        id: wsProc
-        command: ["niri", "msg", "--json", "workspaces"]
-        stdout: SplitParser {
-            onRead: data => {
-                try { root.workspaces = JSON.parse(data) } catch(_) {}
-            }
-        }
-        onExited: running = false
-    }
-    Timer {
-        interval: 1000; running: true; repeat: true; triggeredOnStart: true
-        onTriggered: if (!wsProc.running) wsProc.running = true
-    }
-
-    // volume
-    property string volText: ""
-    Process {
-        id: volProc
-        command: ["bash", "-c", "wpctl get-volume @DEFAULT_AUDIO_SINK@ 2>/dev/null || echo 'N/A'"]
-        stdout: SplitParser {
-            onRead: data => {
-                const m = data.match(/Volume:\s+([\d.]+)(\s+\[MUTED\])?/)
-                if (m) root.volText = m[2]
-                    ? "󰖁 mute"
-                    : `${parseFloat(m[1]) > 0.5 ? "󰕾" : "󰖀"} ${Math.round(parseFloat(m[1])*100)}%`
-            }
-        }
-        onExited: running = false
-    }
-    Timer {
-        interval: 3000; running: true; repeat: true; triggeredOnStart: true
-        onTriggered: if (!volProc.running) volProc.running = true
-    }
-
-    // battery
-    property string batText: ""
-    Process {
-        id: batProc
-        command: ["bash", "-c", `
-            BAT=/sys/class/power_supply/BAT0
-            [ -f $BAT/capacity ] || exit 0
-            CAP=$(cat $BAT/capacity)
-            STA=$(cat $BAT/status)
-            [ "$STA" = "Charging" ] && ICON="⚡" || ICON="🔋"
-            echo "$ICON ${CAP}%"
-        `]
-        stdout: SplitParser { onRead: data => root.batText = data.trim() }
-        onExited: running = false
-    }
-    Timer {
-        interval: 30000; running: true; repeat: true; triggeredOnStart: true
-        onTriggered: if (!batProc.running) batProc.running = true
-    }
-
-    // one bar per screen
-    Variants {
-        model: Quickshell.screens
-
-        PanelWindow {
-            required property var modelData
-            screen: modelData
-            anchors { top: true; left: true; right: true }
-            implicitHeight: 32
-            color: "transparent"
-            WlrLayershell.exclusiveZone: 32
-
-            Rectangle {
-                anchors.fill: parent
-                color: root.colBase
-
-                RowLayout {
-                    anchors { fill: parent; leftMargin: 12; rightMargin: 12 }
-                    spacing: 0
-
-                    // workspaces
-                    Row {
-                        spacing: 8
-                        Layout.alignment: Qt.AlignVCenter
-                        Repeater {
-                            model: root.workspaces
-                            Text {
-                                required property var modelData
-                                text: modelData.is_focused ? "●" : "○"
-                                color: modelData.is_focused ? root.colLove : root.colOverlay
-                                font.pixelSize: 11
-                                verticalAlignment: Text.AlignVCenter
-                            }
-                        }
-                    }
-
-                    Item { Layout.fillWidth: true }
-
-                    // clock
-                    Text {
-                        text: Qt.formatDateTime(root.now, "hh:mm   yyyy-MM-dd")
-                        color: root.colText
-                        font { pixelSize: 13; family: "Noto Sans"; weight: Font.Medium }
-                        Layout.alignment: Qt.AlignVCenter
-                    }
-
-                    Item { Layout.fillWidth: true }
-
-                    // volume
-                    Text {
-                        text: root.volText
-                        color: root.colSubtle
-                        font { pixelSize: 12; family: "JetBrainsMono Nerd Font" }
-                        Layout.alignment: Qt.AlignVCenter
-                        Layout.rightMargin: 14
-                        visible: root.volText !== ""
-                    }
-
-                    // battery
-                    Text {
-                        text: root.batText
-                        color: root.colSubtle
-                        font { pixelSize: 12; family: "Noto Sans" }
-                        Layout.alignment: Qt.AlignVCenter
-                        visible: root.batText !== ""
-                    }
-                }
-            }
-        }
-    }
-}
-QML
-ok "quickshell shell.qml written"
-
-# ══════════════════════════════════════════════════════════════════════════════
-h "fuzzel"
-# ══════════════════════════════════════════════════════════════════════════════
-
-mkdir -p "$HOME/.config/fuzzel"
-cat > "$HOME/.config/fuzzel/fuzzel.ini" << 'FUZZEL'
-[main]
-font=Noto Sans:size=13
-width=35
-lines=8
-horizontal-pad=20
-vertical-pad=12
-inner-pad=8
-anchor=center
-layer=overlay
-
-[colors]
-background=191724ff
-text=e0def4ff
-match=eb6f92ff
-selection=26233aff
-selection-text=e0def4ff
-selection-match=eb6f92ff
-border=26233aff
-
-[border]
-width=1
-radius=8
-FUZZEL
-ok "fuzzel configured"
-
-# ══════════════════════════════════════════════════════════════════════════════
-h "mako"
-# ══════════════════════════════════════════════════════════════════════════════
-
-mkdir -p "$HOME/.config/mako"
-cat > "$HOME/.config/mako/config" << 'MAKO'
-sort=-time
-layer=overlay
-background-color=#1f1d2e
-text-color=#e0def4
-width=360
-height=120
-border-size=1
-border-color=#26233a
-border-radius=8
-max-icon-size=48
-default-timeout=5000
-font=Noto Sans 13
-margin=12
-padding=12,16
-
-[urgency=high]
-border-color=#eb6f92
-default-timeout=0
-MAKO
-ok "mako configured"
-
-# ══════════════════════════════════════════════════════════════════════════════
-h "swaylock"
-# ══════════════════════════════════════════════════════════════════════════════
-
-mkdir -p "$HOME/.config/swaylock"
-cat > "$HOME/.config/swaylock/config" << 'SWAYLOCK'
-color=191724
-ring-color=26233a
-ring-clear-color=9ccfd8
-ring-ver-color=31748f
-ring-wrong-color=eb6f92
-key-hl-color=eb6f92
-text-color=e0def4
-indicator-radius=80
-indicator-thickness=8
-font=Noto Sans
-SWAYLOCK
-ok "swaylock configured"
-
-# ══════════════════════════════════════════════════════════════════════════════
-h "GTK + cursor + fonts"
-# ══════════════════════════════════════════════════════════════════════════════
-
-mkdir -p "$HOME/.config/gtk-3.0" "$HOME/.config/gtk-4.0" "$HOME/.icons/default"
-
-cat > "$HOME/.config/gtk-3.0/settings.ini" << 'GTK3'
-[Settings]
-gtk-theme-name=rose-pine
-gtk-icon-theme-name=Papirus-Dark
-gtk-cursor-theme-name=bibata-modern-classic
-gtk-font-name=Noto Sans 11
-gtk-application-prefer-dark-theme=1
-GTK3
-
-cat > "$HOME/.config/gtk-4.0/settings.ini" << 'GTK4'
-[Settings]
-gtk-theme-name=rose-pine
-gtk-icon-theme-name=Papirus-Dark
-gtk-cursor-theme-name=bibata-modern-classic
-gtk-font-name=Noto Sans 11
-gtk-application-prefer-dark-theme=1
-gtk-color-scheme=prefer-dark
-GTK4
-
-# set via gsettings so libadwaita/GNOME apps respect it
-if command -v gsettings &>/dev/null; then
-  gsettings set org.gnome.desktop.interface color-scheme     prefer-dark
-  gsettings set org.gnome.desktop.interface gtk-theme        rose-pine
-  gsettings set org.gnome.desktop.interface icon-theme       Papirus-Dark
-  gsettings set org.gnome.desktop.interface cursor-theme     bibata-modern-classic
-  gsettings set org.gnome.desktop.interface font-name        "Noto Sans 11"
-  gsettings set org.gnome.desktop.interface monospace-font-name "JetBrainsMono Nerd Font 12"
+# ── detect desktop vs laptop ──────────────────────────────────────────────────
+IS_LAPTOP=false
+if ls /sys/class/power_supply/BAT* &>/dev/null; then
+  IS_LAPTOP=true
+  log "laptop detected — battery management will be configured"
+else
+  log "desktop detected"
 fi
 
-cat > "$HOME/.icons/default/index.theme" << 'CURSOR'
-[Icon Theme]
-Name=Default
-Inherits=bibata-modern-classic
-CURSOR
+h "sudo · multilib · paru"
 
-grep -q 'Xcursor.theme' "$HOME/.Xresources" 2>/dev/null || \
-  printf 'Xcursor.theme: bibata-modern-classic\nXcursor.size: 24\n' >> "$HOME/.Xresources"
+SUDOERS="/etc/sudoers.d/nopasswd-wheel"
+if [[ ! -f "$SUDOERS" ]]; then
+  echo "%wheel ALL=(ALL) NOPASSWD: ALL" | sudo tee "$SUDOERS" >/dev/null
+  sudo chmod 440 "$SUDOERS"
+  ok "passwordless sudo → wheel"
+fi
 
+log "system upgrade..."
+sudo pacman -Syu --noconfirm
+
+if ! grep -q '^\[multilib\]' /etc/pacman.conf; then
+  sudo sed -i '/^#\[multilib\]/{n;s/^#//};/^#\[multilib\]/s/^#//' /etc/pacman.conf
+  sudo pacman -Sy --noconfirm
+  ok "multilib enabled"
+fi
+
+if ! command -v paru &>/dev/null; then
+  log "building paru..."
+  pi git base-devel
+  T=$(mktemp -d)
+  git clone --depth 1 https://aur.archlinux.org/paru-bin.git "$T/paru"
+  pushd "$T/paru" >/dev/null; makepkg -si --noconfirm; popd >/dev/null
+  rm -rf "$T"
+  ok "paru installed"
+fi
+
+# write paru config — fully non-interactive
+mkdir -p "$HOME/.config/paru"
+cat > "$HOME/.config/paru/paru.conf" << 'PARU_CONF'
+[options]
+SkipReview
+NewsOnUpgrade = false
+RemoveMake
+CleanAfter
+PARU_CONF
+ok "paru configured (non-interactive)"
+
+h "pacman packages"
+
+pi \
+  fish starship zoxide fzf fd ripgrep bat eza tmux \
+  ttf-jetbrains-mono-nerd noto-fonts noto-fonts-cjk noto-fonts-emoji \
+  ttf-liberation ttf-dejavu otf-font-awesome \
+  fuzzel mako swaylock grim slurp wl-clipboard \
+  swaybg xdg-desktop-portal-gnome libnotify brightnessctl \
+  discord signal-desktop \
+  git python python-pip python-virtualenv github-cli \
+  docker docker-compose docker-buildx \
+  sqlitebrowser \
+  android-tools android-udev scrcpy gvfs-mtp \
+  steam gamemode lib32-gamemode mangohud lib32-mangohud \
+  wireguard-tools tailscale wireshark-qt \
+  thunderbird \
+  obs-studio audacity v4l2loopback-dkms flameshot \
+  reflector zram-generator irqbalance cpupower brightnessctl \
+  power-profiles-daemon imagemagick
+ok "pacman done"
+
+h "AUR packages"
+
+# write paru config to be fully non-interactive
+mkdir -p "$HOME/.config/paru"
+cat > "$HOME/.config/paru/paru.conf" << 'PCONF'
+[options]
+SkipReview
+NewsOnUpgrade = false
+RemoveMake
+CleanAfter
+PCONF
+
+# release any pacman db lock left from the -Syu above
+sudo rm -f /var/lib/pacman/db.lck 2>/dev/null || true
+
+aur asusctl
+aur niri-bin
+aur quickshell-git
+aur papirus-icon-theme
+aur bibata-cursor-theme
+aur vivaldi
+aur vivaldi-ffmpeg-codecs
+aur librewolf-bin
+aur ungoogled-chromium-bin
+aur tor-browser
+aur discord-canary
+aur slack-desktop
+aur rocketchat-desktop
+aur zed
+aur visual-studio-code-bin
+aur jetbrains-toolbox
+aur fnm-bin
+aur bun-bin
+aur docker-desktop
+aur mongodb-compass
+aur dbeaver-ce
+aur redisinsight-bin
+aur nats-server
+aur natscli
+aur prismlauncher
+aur protonup-qt
+aur mullvad-vpn-bin
+aur openlens-bin
+aur minikube
+aur kubectl-bin
+aur 1password
+aur gitbutler-bin
+aur linear-app
+aur spotify
+aur yourkit
+aur blockbench-bin
+aur bruno-bin
+aur flatpak
+aur openrgb
+ok "AUR done"
+
+h "shell — fish · starship · ghostty"
+
+FISH_BIN="$(command -v fish)"
+if [[ "$(getent passwd "$USER" | cut -d: -f7)" != "$FISH_BIN" ]]; then
+  sudo usermod -s "$FISH_BIN" "$USER"
+  ok "default shell → fish"
+fi
+
+mkdir -p "$HOME/.config/fish/conf.d"
+
+cat > "$HOME/.config/fish/config.fish" << 'FISH'
+starship init fish | source
+zoxide init fish | source
+
+alias ls='eza --icons --group-directories-first'
+alias ll='eza -lah --icons --group-directories-first --git'
+alias lt='eza --tree --icons --level=2'
+alias cat='bat --style=plain'
+alias grep='grep --color=auto'
+
+function jdk
+    if test -z "$argv[1]"
+        archlinux-java status; return
+    end
+    sudo archlinux-java set "java-$argv[1]-openjdk"
+    set -gx JAVA_HOME /usr/lib/jvm/java-$argv[1]-openjdk
+    echo "→ "(java -version 2>&1 | head -1)
+end
+
+if command -q fnm
+    fnm env --use-on-cd | source
+end
+
+fish_add_path $HOME/.local/bin
+fish_add_path $HOME/.cargo/bin
+FISH
+
+cat > "$HOME/.config/starship.toml" << 'STAR'
+format = """
+$directory$git_branch$git_status$java$kotlin$nodejs$python$rust$docker_context$line_break$character"""
+add_newline = true
+
+[character]
+success_symbol = "[❯](bold green)"
+error_symbol   = "[❯](bold red)"
+
+[directory]
+style = "bold cyan"
+truncation_length = 3
+truncate_to_repo = true
+
+[git_branch]
+format = " [on](dim white) [$symbol$branch](bold purple)"
+symbol = " "
+
+[git_status]
+format = "([$all_status$ahead_behind]($style) )"
+style = "bold yellow"
+conflicted = "⚡"
+ahead = "⇡${count}"
+behind = "⇣${count}"
+modified = "!${count}"
+untracked = "?${count}"
+staged = "+${count}"
+
+[java]
+format = " [☕ $version](bold red)"
+detect_files = ["pom.xml","build.gradle","*.java"]
+
+[kotlin]
+format = " [kotlin $version](bold blue)"
+
+[nodejs]
+format = " [node $version](bold green)"
+
+[python]
+format = " [py $version](bold yellow)"
+
+[docker_context]
+format = " [🐳 $context](bold blue)"
+
+[time]
+disabled = false
+format = "[$time](dim white) "
+time_format = "%H:%M"
+STAR
+
+mkdir -p "$HOME/.config/ghostty/themes"
+
+cat > "$HOME/.config/ghostty/themes/rose-pine" << 'THEME'
+palette = 0=#191724
+palette = 1=#eb6f92
+palette = 2=#31748f
+palette = 3=#f6c177
+palette = 4=#9ccfd8
+palette = 5=#c4a7e7
+palette = 6=#ebbcba
+palette = 7=#e0def4
+palette = 8=#26233a
+palette = 9=#eb6f92
+palette = 10=#31748f
+palette = 11=#f6c177
+palette = 12=#9ccfd8
+palette = 13=#c4a7e7
+palette = 14=#ebbcba
+palette = 15=#e0def4
+background = 191724
+foreground = e0def4
+cursor-color = e0def4
+selection-background = 403d52
+selection-foreground = e0def4
+THEME
+
+cat > "$HOME/.config/ghostty/config" << 'GHOSTTY'
+theme                  = rose-pine
+font-family            = JetBrainsMono Nerd Font
+font-size              = 13
+font-thicken           = true
+window-padding-x       = 0
+window-padding-y       = 0
+background-opacity     = 0.97
+background-blur-radius = 20
+shell-integration      = fish
+scrollback-limit       = 10000
+copy-on-select         = clipboard
+cursor-style           = bar
+cursor-style-blink     = true
+gtk-tabs-location      = bottom
+gtk-wide-tabs          = false
+keybind = ctrl+shift+t=new_tab
+keybind = ctrl+shift+w=close_surface
+keybind = ctrl+shift+c=copy_to_clipboard
+keybind = ctrl+shift+v=paste_from_clipboard
+keybind = ctrl+equal=increase_font_size:1
+keybind = ctrl+minus=decrease_font_size:1
+keybind = ctrl+zero=reset_font_size
+keybind = ctrl+shift+d=new_split:right
+keybind = ctrl+shift+e=new_split:down
+keybind = ctrl+shift+left_bracket=goto_split:previous
+keybind = ctrl+shift+right_bracket=goto_split:next
+GHOSTTY
+ok "shell configured"
+
+h "VSCode"
+
+mkdir -p "$HOME/.config/Code/User"
+cat > "$HOME/.config/Code/User/settings.json" << 'JSON'
+{
+  "editor.fontFamily": "'JetBrainsMono Nerd Font', monospace",
+  "editor.fontSize": 13,
+  "editor.lineHeight": 1.6,
+  "editor.fontLigatures": true,
+  "editor.tabSize": 4,
+  "editor.minimap.enabled": false,
+  "editor.scrollbar.vertical": "hidden",
+  "editor.scrollbar.horizontal": "hidden",
+  "editor.overviewRulerBorder": false,
+  "editor.glyphMargin": false,
+  "editor.lineNumbers": "relative",
+  "editor.cursorBlinking": "smooth",
+  "editor.cursorSmoothCaretAnimation": "on",
+  "editor.smoothScrolling": true,
+  "editor.bracketPairColorization.enabled": true,
+  "editor.guides.bracketPairs": "active",
+  "workbench.colorTheme": "Default Dark Modern",
+  "workbench.activityBar.location": "hidden",
+  "workbench.statusBar.visible": true,
+  "workbench.layoutControl.enabled": false,
+  "workbench.sideBar.location": "right",
+  "workbench.startupEditor": "none",
+  "workbench.tips.enabled": false,
+  "window.titleBarStyle": "custom",
+  "window.menuBarVisibility": "compact",
+  "window.commandCenter": false,
+  "terminal.integrated.fontFamily": "'JetBrainsMono Nerd Font'",
+  "terminal.integrated.fontSize": 12,
+  "terminal.integrated.defaultProfile.linux": "fish",
+  "breadcrumbs.enabled": false,
+  "telemetry.telemetryLevel": "off",
+  "update.mode": "none",
+  "extensions.autoCheckUpdates": false,
+  "git.autofetch": true,
+  "git.confirmSync": false,
+  "files.trimTrailingWhitespace": true,
+  "files.insertFinalNewline": true,
+  "files.autoSave": "onFocusChange"
+}
+JSON
+ok "VSCode configured"
+
+h "git defaults"
+
+git config --global init.defaultBranch   main
+git config --global pull.rebase          false
+git config --global core.autocrlf        input
+git config --global push.autoSetupRemote true
+git config --global rerere.enabled       true
+git config --global fetch.prune          true
+
+if ! grep -q '__jdk_switcher__' "$HOME/.bashrc" 2>/dev/null; then
+  cat >> "$HOME/.bashrc" << 'BASH'
+# __jdk_switcher__
+jdk() {
+  if [[ -z "${1:-}" ]]; then archlinux-java status; return; fi
+  sudo archlinux-java set "java-${1}-openjdk"
+  export JAVA_HOME="/usr/lib/jvm/java-${1}-openjdk"
+  java -version
+}
+BASH
+fi
+ok "git + jdk() configured"
+
+h "services"
+
+sudo systemctl enable docker.service docker.socket
+sudo usermod -aG docker "$USER"
+ok "docker enabled"
+
+sudo usermod -aG gamemode "$USER"
+systemctl --user enable --now gamemoded.service 2>/dev/null || true
+ok "gamemode enabled"
+
+sudo usermod -aG adbusers "$USER" 2>/dev/null || true
+ok "adb group set"
+
+svc_enable mullvad   mullvad-daemon.service
+svc_enable tailscale tailscaled.service
+sudo usermod -aG wireshark "$USER"
+sudo setcap cap_net_raw,cap_net_admin=eip /usr/bin/dumpcap 2>/dev/null || true
+ok "VPN daemons enabled"
+
+command -v flatpak &>/dev/null && \
+  flatpak remote-add --if-not-exists flathub \
+    https://dl.flathub.org/repo/flathub.flatpakrepo 2>/dev/null
+ok "flatpak: flathub added"
+
+echo 'v4l2loopback' | sudo tee /etc/modules-load.d/v4l2loopback.conf >/dev/null
+sudo modprobe v4l2loopback 2>/dev/null || true
+ok "OBS virtual camera module loaded"
+
+if command -v minikube &>/dev/null; then
+  minikube config set driver docker 2>/dev/null
+  ok "minikube driver → docker"
+fi
+
+# default browser — vivaldi
+if command -v vivaldi-stable &>/dev/null || command -v vivaldi &>/dev/null; then
+  VIVALDI_DESKTOP="vivaldi-stable.desktop"
+  [[ -f /usr/share/applications/vivaldi.desktop ]] && VIVALDI_DESKTOP="vivaldi.desktop"
+
+  # xdg-settings
+  xdg-settings set default-web-browser "$VIVALDI_DESKTOP" 2>/dev/null || true
+
+  # KDE-specific — this is what Plasma actually reads
+  kwriteconfig6 --file kdeglobals --group General \
+    --key BrowserApplication "$VIVALDI_DESKTOP"
+
+  # write mimeapps.list properly using python — avoids duplicate section bug
+  python3 - "$VIVALDI_DESKTOP" << 'PY'
+import configparser, os, sys
+
+desktop = sys.argv[1]
+path = os.path.expanduser('~/.config/mimeapps.list')
+
+# strict=False allows duplicate sections (from previous broken runs)
+cfg = configparser.RawConfigParser(strict=False)
+cfg.optionxform = str
+if os.path.exists(path):
+    cfg.read(path)
+
+if 'Default Applications' not in cfg:
+    cfg['Default Applications'] = {}
+
+for mime in [
+    'x-scheme-handler/http',
+    'x-scheme-handler/https',
+    'x-scheme-handler/ftp',
+    'text/html',
+    'application/xhtml+xml',
+]:
+    cfg['Default Applications'][mime] = desktop
+
+with open(path, 'w') as f:
+    cfg.write(f)
+
+print(f'mimeapps.list → {desktop}')
+PY
+
+  ok "default browser → Vivaldi"
+else
+  warn "Vivaldi not installed — run: paru -S vivaldi vivaldi-ffmpeg-codecs"
+  warn "then: xdg-settings set default-web-browser vivaldi-stable.desktop"
+fi
+
+if command -v nats-server &>/dev/null; then
+  mkdir -p "$HOME/.config/systemd/user"
+  cat > "$HOME/.config/systemd/user/nats-dev.service" << 'NATS'
+[Unit]
+Description=NATS dev server
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/nats-server -p 4222 -m 8222 --jetstream
+Restart=on-failure
+
+[Install]
+WantedBy=default.target
+NATS
+  systemctl --user daemon-reload
+  systemctl --user enable --now nats-dev.service
+  ok "NATS enabled (4222/8222)"
+fi
+
+cat > "$HOME/.config/fish/conf.d/1password-ssh.fish" << 'OP'
+set -gx SSH_AUTH_SOCK "$HOME/.1password/agent.sock"
+OP
+
+h "system tweaks"
+
+log "refreshing mirrors..."
+sudo reflector --protocol https --sort rate --latest 10 \
+  --save /etc/pacman.d/mirrorlist 2>/dev/null && ok "mirrors refreshed"
+
+if [[ ! -f /etc/systemd/zram-generator.conf ]]; then
+  sudo bash -c 'cat > /etc/systemd/zram-generator.conf << EOF
+[zram0]
+zram-size = ram / 2
+compression-algorithm = zstd
+EOF'
+  sudo systemctl daemon-reload
+  sudo systemctl start systemd-zram-setup@zram0.service 2>/dev/null || true
+  ok "zram enabled"
+fi
+
+sudo tee /etc/sysctl.d/99-perf.conf >/dev/null << 'SYSCTL'
+vm.swappiness=10
+fs.inotify.max_user_watches=524288
+SYSCTL
+sudo sysctl --system &>/dev/null
+ok "sysctl applied"
+
+sudo systemctl enable --now fstrim.timer irqbalance
+
+powerprofilesctl set performance 2>/dev/null || true
+sudo cpupower frequency-set -g performance &>/dev/null || true
+sudo mkdir -p /etc/systemd/system/cpupower.service.d
+sudo tee /etc/systemd/system/cpupower.service.d/performance.conf >/dev/null << 'EOF'
+[Service]
+ExecStart=
+ExecStart=/usr/bin/cpupower frequency-set -g performance
+EOF
+sudo systemctl enable cpupower.service 2>/dev/null || true
+
+echo 'options usbcore autosuspend=-1' | \
+  sudo tee /etc/modprobe.d/disable-usb-autosuspend.conf >/dev/null
+
+
+for dev in /sys/class/leds/*kbd*; do
+  [[ -d "$dev" ]] && brightnessctl --device="$(basename "$dev")" set 100% &>/dev/null || true
+done
+command -v brightnessctl &>/dev/null && sudo tee /etc/udev/rules.d/90-kbd-backlight.rules >/dev/null << 'UDEV'
+ACTION=="add", SUBSYSTEM=="leds", KERNEL=="*kbd*", RUN+="/usr/bin/brightnessctl --device=%k set 100%%"
+UDEV
+
+sudo tee "$HOME/.config/powermanagementprofilesrc" >/dev/null << 'POWER'
+# ── AC (plugged in) ───────────────────────────────────────────────────────────
+# full brightness, screen off after 10 min idle, never suspend
+[AC][BrightnessControl]
+value=100
+
+[AC][DimDisplay]
+idleTime=0
+# dim after 9 min (ms), screen off at 10 min
+
+[AC][DPMSControl]
+idleTime=0
+lockBeforeTurnOff=0
+
+[AC][HandleButtonEvents]
+lidAction=0
+powerButtonAction=1
+
+[AC][SuspendSession]
+idleTime=0
+suspendThenHibernate=false
+suspendType=0
+
+# ── Battery ───────────────────────────────────────────────────────────────────
+# dim after 2 min, screen off after 5 min, suspend after 20 min
+[Battery][BrightnessControl]
+value=80
+
+[Battery][DimDisplay]
+idleTime=120000
+
+[Battery][DPMSControl]
+idleTime=300000
+lockBeforeTurnOff=1
+
+[Battery][HandleButtonEvents]
+lidAction=1
+powerButtonAction=1
+
+[Battery][SuspendSession]
+idleTime=1200000
+suspendThenHibernate=false
+suspendType=1
+
+# ── Low Battery ───────────────────────────────────────────────────────────────
+# screen off after 2 min, suspend after 5 min
+[LowBattery][BrightnessControl]
+value=50
+
+[LowBattery][DimDisplay]
+idleTime=60000
+
+[LowBattery][DPMSControl]
+idleTime=120000
+lockBeforeTurnOff=1
+
+[LowBattery][SuspendSession]
+idleTime=300000
+suspendThenHibernate=true
+suspendType=1
+POWER
+
+# ── laptop-specific settings ─────────────────────────────────────────────────
+if $IS_LAPTOP; then
+  # 80% charge cap — protects battery when always plugged in
+  # writes to sysfs threshold supported by most modern laptop firmware
+  _set_charge_limit() {
+    local limit="$1"
+    local set=false
+
+    # try asusctl first (ASUS laptops)
+    if command -v asusctl &>/dev/null; then
+      asusctl -c "$limit" 2>/dev/null && ok "  charge cap → ${limit}% (asusctl)" && set=true
+    fi
+
+    # try standard sysfs threshold (ThinkPad, Framework, Dell, most others)
+    if ! $set; then
+      for bat in /sys/class/power_supply/BAT*; do
+        [[ -d "$bat" ]] || continue
+        local name; name=$(basename "$bat")
+        for attr in charge_control_end_threshold charge_stop_threshold; do
+          if [[ -f "$bat/$attr" ]]; then
+            echo "$limit" | sudo tee "$bat/$attr" >/dev/null 2>&1 \
+              && ok "  $name: charge cap → ${limit}% ($attr)" && set=true && break
+          fi
+        done
+      done
+    fi
+
+    if $set; then
+      # write a simple helper script — avoids inline shell quoting hell in ExecStart
+      sudo tee /usr/local/bin/battery-charge-limit.sh >/dev/null << SCRIPT
+#!/bin/sh
+LIMIT=${limit}
+command -v asusctl >/dev/null 2>&1 && asusctl -c \$LIMIT && exit 0
+for attr in charge_control_end_threshold charge_stop_threshold; do
+  for bat in /sys/class/power_supply/BAT*; do
+    f="\$bat/\$attr"
+    if [ -f "\$f" ]; then
+      printf '%d\n' "\$LIMIT" > "\$f"
+    fi
+  done
+done
+exit 0
+SCRIPT
+      sudo chmod +x /usr/local/bin/battery-charge-limit.sh
+
+      sudo tee /etc/systemd/system/battery-charge-limit.service >/dev/null << 'SERVICE'
+[Unit]
+Description=Set battery charge limit
+After=multi-user.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/bin/battery-charge-limit.sh
+
+[Install]
+WantedBy=multi-user.target
+SERVICE
+      sudo systemctl daemon-reload
+      sudo systemctl enable --now battery-charge-limit.service
+      ok "  charge cap persisted"
+    else
+      warn "  charge cap: hardware not supported — install asusctl/tlp/vendor tool manually"
+    fi
+  }
+
+  _set_charge_limit 80
+
+  # lid close — do nothing when plugged in
+  sudo mkdir -p /etc/systemd/logind.conf.d
+  sudo tee /etc/systemd/logind.conf.d/lid.conf >/dev/null << 'LID'
+[Login]
+HandleLidSwitch=ignore
+HandleLidSwitchExternalPower=ignore
+HandleLidSwitchDocked=ignore
+LID
+  sudo systemctl daemon-reload
+  ok "laptop: lid close = do nothing"
+fi
+
+fc-cache -fv &>/dev/null
 mkdir -p "$HOME/.config/fontconfig"
 cat > "$HOME/.config/fontconfig/fonts.conf" << 'FONTCONF'
 <?xml version="1.0"?><!DOCTYPE fontconfig SYSTEM "fonts.dtd">
@@ -507,62 +696,127 @@ cat > "$HOME/.config/fontconfig/fonts.conf" << 'FONTCONF'
     <prefer><family>Noto Sans</family></prefer></alias>
 </fontconfig>
 FONTCONF
-fc-cache -fv &>/dev/null
-ok "GTK, cursor, fonts done"
+ok "tweaks applied"
 
-# ══════════════════════════════════════════════════════════════════════════════
-h "environment"
-# ══════════════════════════════════════════════════════════════════════════════
+h "JDKs"
 
-mkdir -p "$HOME/.config/environment.d"
-cat > "$HOME/.config/environment.d/niri.conf" << 'ENV'
-MOZ_ENABLE_WAYLAND=1
-ELECTRON_OZONE_PLATFORM_HINT=wayland
-QT_QPA_PLATFORM=wayland;xcb
-QT_QPA_PLATFORMTHEME=gtk3
-GTK_THEME=rose-pine
-SDL_VIDEODRIVER=wayland
-CLUTTER_BACKEND=wayland
-XDG_CURRENT_DESKTOP=niri
-XDG_SESSION_TYPE=wayland
-NIXOS_OZONE_WL=1
-# 1Password — needed for popup to work on non-GNOME/KDE Wayland
-_1PASSWORD_SKIP_APPINDICATOR=1
-ENV
-
-# 1Password CLI flags — force Wayland + allow popup via xdg-activation
-mkdir -p "$HOME/.config/1Password"
-cat > "$HOME/.config/1Password/flags" << 'FLAGS'
---enable-features=UseOzonePlatform,WaylandWindowDecorations
---ozone-platform=wayland
---disable-gpu-sandbox
-FLAGS
-ok "environment set"
-
-# ══════════════════════════════════════════════════════════════════════════════
-# if already inside a niri session, restart services live
-# ══════════════════════════════════════════════════════════════════════════════
-if [[ "${XDG_CURRENT_DESKTOP:-}" == "niri" ]]; then
-  h "reloading live services"
-  pkill -x quickshell 2>/dev/null || true; sleep 0.5
-  nohup quickshell &>/dev/null & disown
-  pkill -x mako 2>/dev/null || true; sleep 0.3
-  nohup mako &>/dev/null & disown
-  niri msg action reload-config 2>/dev/null || true
-  ok "services restarted"
+mapfile -t JDKS < <(pacman -Ssq '^jdk[0-9]+-openjdk$' 2>/dev/null | sort -V | uniq)
+if [[ ${#JDKS[@]} -gt 0 ]]; then
+  log "found: ${JDKS[*]}"
+  pi "${JDKS[@]}"
+else
+  warn "auto-discovery failed — installing known LTS list"
+  pi jdk8-openjdk jdk11-openjdk jdk17-openjdk jdk21-openjdk 2>/dev/null || true
 fi
 
-# ══════════════════════════════════════════════════════════════════════════════
+HIGHEST=$(archlinux-java status 2>/dev/null \
+  | grep -oP 'java-\K[0-9]+(?=-openjdk)' | sort -n | uniq | tail -1 || true)
+if [[ -n "$HIGHEST" ]]; then
+  NEXT=$(( HIGHEST + 4 ))
+  if ! pacman -Q "jdk${NEXT}-openjdk" &>/dev/null; then
+    paru -S --needed --noconfirm "jdk${NEXT}-openjdk" &>/dev/null \
+      && ok "jdk${NEXT} installed from AUR" \
+      || log "jdk${NEXT} not in AUR yet"
+  fi
+fi
+
+LATEST=$(archlinux-java status 2>/dev/null \
+  | grep -oP 'java-\K[0-9]+-openjdk' | sort -t- -k1 -n | tail -1 || true)
+[[ -n "$LATEST" ]] && sudo archlinux-java set "java-${LATEST}" 2>/dev/null \
+  && ok "default JDK → java-${LATEST}"
+
+h "Node (fnm)"
+
+if command -v fnm &>/dev/null; then
+  export FNM_DIR="$HOME/.local/share/fnm"
+  export PATH="$FNM_DIR:$PATH"
+  eval "$(fnm env --shell bash 2>/dev/null)" || true
+  fnm install --lts 2>/dev/null || true
+  fnm default lts-latest 2>/dev/null || true
+  if command -v npm &>/dev/null; then
+    npm i -g typescript tsx pnpm prettier eslint 2>/dev/null \
+      && ok "Node $(node -v) + globals" \
+      || warn "npm globals: run after relogin"
+  fi
+fi
+
 echo -e "\n${W}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${D}"
-echo -e "${G}  ✔  rice done${D}"
+echo -e "${G}  ✔  setup complete${D}"
 echo -e "${W}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${D}\n"
-if [[ "${XDG_CURRENT_DESKTOP:-}" != "niri" ]]; then
-  echo -e "  ${Y}not in a niri session — configs written but not active yet${D}"
-  echo -e "  log out and select ${W}Niri${D} from the SDDM session picker\n"
+echo -e "  next: run ${Y}bash rice.sh${D} from a KDE session"
+echo -e "  then: ${Y}sudo reboot${D}\n"
+
+h "configuration wizard"
+
+_ask() { printf "\n  ${Y}?${D} $1 [Y/n] "; local r; read -r r; [[ "${r:-y}" =~ ^[Yy]$ ]]; }
+_step() { echo -e "\n${W}  ─── $* ───${D}"; }
+
+printf "\n  run wizard? [Y/n] "; read -r _W
+[[ "${_W:-y}" =~ ^[Yy]$ ]] || { echo -e "  ${Y}run rice.sh when ready${D}\n"; exit 0; }
+
+_step "git identity"
+if _ask "set git name + email?"; then
+  printf "  name:  "; read -r _N
+  printf "  email: "; read -r _E
+  git config --global user.name  "$_N"
+  git config --global user.email "$_E"
+  ok "git: $_N <$_E>"
 fi
-echo -e "  ${C}Mod${D} = Super/Win key"
-echo -e "  ${C}Mod+Return${D}    terminal"
-echo -e "  ${C}Mod+D${D}         launcher"
-echo -e "  ${C}Mod+Q${D}         close window"
-echo -e "  ${C}Mod+Shift+L${D}   lock screen"
-echo -e "  ${C}Mod+Shift+E${D}   quit niri\n"
+
+_step "SSH key"
+if [[ ! -f "$HOME/.ssh/id_ed25519" ]]; then
+  if _ask "generate SSH key?"; then
+    printf "  email: "; read -r _SE
+    _SE="${_SE:-$(whoami)@$(hostname)}"
+    ssh-keygen -t ed25519 -C "$_SE" -f "$HOME/.ssh/id_ed25519" -N ""
+    eval "$(ssh-agent -s)" &>/dev/null; ssh-add "$HOME/.ssh/id_ed25519" 2>/dev/null
+    echo -e "\n  ${C}public key:${D}\n  ${W}$(cat "$HOME/.ssh/id_ed25519.pub")${D}"
+  fi
+else
+  ok "SSH key exists: $(cat "$HOME/.ssh/id_ed25519.pub")"
+fi
+
+_step "GitHub CLI"
+_ask "gh auth login?" && gh auth login
+
+_step "Docker context"
+if _ask "use Docker Desktop context?"; then
+  docker context use desktop-linux 2>/dev/null && ok "context → desktop-linux" \
+    || warn "context not found — start Docker Desktop first"
+else
+  docker context use default 2>/dev/null || true
+  ok "context → default (engine)"
+fi
+
+_step "Tailscale"
+_ask "connect tailscale?" && sudo tailscale up
+
+_step "Mullvad"
+if _ask "log in to Mullvad?"; then
+  printf "  account number: "; read -r _MA
+  mullvad account login "$_MA" && ok "Mullvad logged in" \
+    || warn "failed — run: mullvad account login <number>"
+fi
+
+_step "default JDK"
+echo "  $(archlinux-java status 2>/dev/null || echo 'none')"
+if _ask "set default JDK?"; then
+  printf "  version (8/11/17/21/25): "; read -r _JV
+  sudo archlinux-java set "java-${_JV}-openjdk" && ok "JDK → $_JV" \
+    || warn "not found — check: archlinux-java status"
+fi
+
+_step "wallpaper"
+if _ask "add a wallpaper to the rotation?"; then
+  printf "  path: "; read -r _WP
+  _WP="${_WP/#\~/$HOME}"
+  if [[ -f "$_WP" ]]; then
+    mkdir -p "$HOME/.local/share/wallpapers/rice"
+    cp "$_WP" "$HOME/.local/share/wallpapers/rice/$(basename "$_WP")"
+    ok "added to rotation"
+  else
+    warn "not found: $_WP"
+  fi
+fi
+
+echo -e "\n${G}  ✔  wizard done — run rice.sh next${D}\n"
