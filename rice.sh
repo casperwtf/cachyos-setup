@@ -73,10 +73,11 @@ input {
         accel-profile "flat"
     }
     focus-follows-mouse max-scroll-amount="0%"
+    warp-mouse-to-focus
 }
 
 layout {
-    gaps 12
+    gaps 0
     preset-column-widths {
         proportion 0.33333
         proportion 0.5
