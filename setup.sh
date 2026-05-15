@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ══════════════════════════════════════════════════════════════════════════════
-#  setup.sh — CachyOS KDE game dev setup
+#  setup.sh — CachyOS game dev setup (Niri)
 #  idempotent: safe to run multiple times
 # ══════════════════════════════════════════════════════════════════════════════
 set -euo pipefail
@@ -42,7 +42,7 @@ clear
 echo -e "${W}"
 cat << 'EOF'
   ╔══════════════════════════════════════╗
-  ║  CachyOS KDE · Game Dev Setup       ║
+  ║  CachyOS · Game Dev Setup (Niri)     ║
   ╚══════════════════════════════════════╝
 EOF
 echo -e "${D}"
@@ -290,8 +290,8 @@ theme                  = rose-pine
 font-family            = JetBrainsMono Nerd Font
 font-size              = 13
 font-thicken           = true
-window-padding-x       = 12
-window-padding-y       = 8
+window-padding-x       = 0
+window-padding-y       = 0
 background-opacity     = 0.97
 background-blur-radius = 20
 shell-integration      = fish
@@ -425,9 +425,6 @@ if command -v vivaldi-stable &>/dev/null || command -v vivaldi &>/dev/null; then
   # xdg-settings
   xdg-settings set default-web-browser "$VIVALDI_DESKTOP" 2>/dev/null || true
 
-  # KDE-specific — this is what Plasma actually reads
-  kwriteconfig6 --file kdeglobals --group General \
-    --key BrowserApplication "$VIVALDI_DESKTOP"
 
   # write mimeapps.list properly using python — avoids duplicate section bug
   python3 - "$VIVALDI_DESKTOP" << 'PY'
@@ -489,7 +486,44 @@ cat > "$HOME/.config/fish/conf.d/1password-ssh.fish" << 'OP'
 set -gx SSH_AUTH_SOCK "$HOME/.1password/agent.sock"
 OP
 
-h "system tweaks"
+h "SDDM — default session → Niri"
+
+sudo mkdir -p /etc/sddm.conf.d
+sudo tee /etc/sddm.conf.d/niri.conf >/dev/null << 'SDDM'
+[General]
+DefaultSession=niri.desktop
+
+[Wayland]
+EnableHiDPI=true
+SDDM
+ok "SDDM default session → niri"
+
+h "remove KDE plasma (keep apps + frameworks)"
+
+# remove the plasma shell/compositor — keep Qt libs, Dolphin, etc.
+# apps that depend on kdelibs/qt6 still work fine without the plasma DE
+KDE_DE_PKGS=(
+    plasma plasma-desktop plasma-workspace plasma-meta
+    kwin plasmashell plasma-pa plasma-nm plasma-systemmonitor
+    plasma-browser-integration plasma-firewall plasma-vault
+    plasma-welcome plasma-disks plasma-thunderbolt
+    kdeplasma-addons kscreen kinfocenter ksystemstats
+    powerdevil bluedevil breeze-gtk
+)
+
+INSTALLED=()
+for pkg in "${KDE_DE_PKGS[@]}"; do
+    pacman -Q "$pkg" &>/dev/null && INSTALLED+=("$pkg")
+done
+
+if [[ ${#INSTALLED[@]} -gt 0 ]]; then
+    log "removing plasma DE packages: ${INSTALLED[*]}"
+    sudo pacman -Rns --noconfirm "${INSTALLED[@]}" 2>/dev/null \
+        && ok "KDE plasma DE removed" \
+        || warn "some packages could not be removed (may have been dependencies)"
+else
+    ok "plasma DE packages already removed"
+fi
 
 log "refreshing mirrors..."
 sudo reflector --protocol https --sort rate --latest 10 \
@@ -743,7 +777,7 @@ fi
 echo -e "\n${W}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${D}"
 echo -e "${G}  ✔  setup complete${D}"
 echo -e "${W}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${D}\n"
-echo -e "  next: run ${Y}bash rice.sh${D} from a KDE session"
+echo -e "  next: run ${Y}bash rice.sh${D} then reboot and select Niri from SDDM"
 echo -e "  then: ${Y}sudo reboot${D}\n"
 
 h "configuration wizard"
