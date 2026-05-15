@@ -59,7 +59,9 @@ prefer-no-csd
 
 input {
     keyboard {
-        xkb { layout "us" }
+        xkb {
+            layout "us"
+        }
         repeat-delay 200
         repeat-rate 35
     }
