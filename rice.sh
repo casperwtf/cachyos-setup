@@ -73,7 +73,6 @@ input {
         accel-profile "flat"
     }
     focus-follows-mouse max-scroll-amount="0%"
-    warp-mouse-to-focus
 }
 
 layout {
