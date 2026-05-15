@@ -84,7 +84,7 @@ input {
 }
 
 layout {
-    gaps 5
+    gaps 0
 
     preset-column-widths {
         proportion 0.33333
@@ -375,7 +375,7 @@ gtk-application-prefer-dark-theme=1
 gtk-color-scheme=prefer-dark
 GTK4
 
-if command -v gsettings &>/dev/null; then
+if command -v gsettings &>/dev/null && [ -n "${DBUS_SESSION_BUS_ADDRESS:-}" ]; then
   gsettings set org.gnome.desktop.interface color-scheme          prefer-dark
   gsettings set org.gnome.desktop.interface gtk-theme             rose-pine
   gsettings set org.gnome.desktop.interface icon-theme            Papirus-Dark
