@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 # ══════════════════════════════════════════════════════════════════════════════
-#  rice.sh — Niri + Quickshell setup
-#  Rosé Pine · quickshell · fuzzel · mako · swaylock
-#  idempotent: safe to re-run
+#  rice.sh — Niri + Quickshell
+#  Rosé Pine · fuzzel · mako · swaylock
 # ══════════════════════════════════════════════════════════════════════════════
 set -euo pipefail
 
@@ -10,47 +9,27 @@ G='\033[0;32m' Y='\033[1;33m' C='\033[0;36m' W='\033[1;37m' D='\033[0m'
 ok()  { echo -e "${G}✔${D} $*"; }
 warn(){ echo -e "${Y}⚠${D}  $*"; }
 h()   { echo -e "\n${W}━━━  $*  ━━━${D}"; }
-log() { echo -e "${C}→${D} $*"; }
 
 [[ $EUID -eq 0 ]] && { echo "run as normal user"; exit 1; }
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-
-echo -e "\n${W}  Niri rice — Rosé Pine + Quickshell${D}\n"
+IN_NIRI=[[ "${XDG_CURRENT_DESKTOP:-}" == "niri" ]] && echo true || echo false
 
 # ══════════════════════════════════════════════════════════════════════════════
 h "packages"
 # ══════════════════════════════════════════════════════════════════════════════
 
 sudo pacman -S --needed --noconfirm \
-  fuzzel mako swaylock grim slurp wl-clipboard \
-  swaybg xdg-desktop-portal-gnome libnotify \
+  fuzzel mako swaylock grim slurp wl-clipboard swaybg \
+  xdg-desktop-portal-gnome network-manager-applet \
   papirus-icon-theme noto-fonts ttf-jetbrains-mono-nerd \
-  brightnessctl network-manager-applet blueman
+  libnotify brightnessctl
 
-GIT_TERMINAL_PROMPT=0 PAGER=cat paru -S --needed --noconfirm \
-  niri-bin quickshell-git bibata-cursor-theme \
-  rose-pine-gtk-theme-full </dev/null 2>/dev/null || \
-  warn "some AUR packages skipped"
+GIT_TERMINAL_PROMPT=0 PAGER=cat \
+  paru -S --needed --noconfirm niri-bin quickshell-git \
+  bibata-cursor-theme rose-pine-gtk-theme-full \
+  </dev/null 2>/dev/null || warn "some AUR packages skipped"
 
-ok "packages ready"
-
-# ══════════════════════════════════════════════════════════════════════════════
-h "environment"
-# ══════════════════════════════════════════════════════════════════════════════
-
-mkdir -p "$HOME/.config/environment.d"
-cat > "$HOME/.config/environment.d/niri.conf" << 'ENV'
-MOZ_ENABLE_WAYLAND=1
-ELECTRON_OZONE_PLATFORM_HINT=wayland
-QT_QPA_PLATFORM=wayland;xcb
-QT_QPA_PLATFORMTHEME=gtk3
-SDL_VIDEODRIVER=wayland
-CLUTTER_BACKEND=wayland
-XDG_CURRENT_DESKTOP=niri
-XDG_SESSION_TYPE=wayland
-NIXOS_OZONE_WL=1
-ENV
-ok "environment set"
+ok "packages done"
 
 # ══════════════════════════════════════════════════════════════════════════════
 h "wallpapers"
@@ -58,24 +37,23 @@ h "wallpapers"
 
 WALL_DIR="$HOME/.local/share/wallpapers/rice"
 mkdir -p "$WALL_DIR"
-REPO_WALLS="$REPO_DIR/wallpapers"
-if [[ -d "$REPO_WALLS" ]]; then
-  find "$REPO_WALLS" -maxdepth 1 \
+[[ -d "$REPO_DIR/wallpapers" ]] && \
+  find "$REPO_DIR/wallpapers" -maxdepth 1 \
     \( -iname "*.jpg" -o -iname "*.jpeg" -o -iname "*.png" -o -iname "*.webp" \) \
     -exec cp -n {} "$WALL_DIR/" \;
-  ok "$(find "$WALL_DIR" -maxdepth 1 -type f | wc -l) wallpapers in $WALL_DIR"
-fi
-FIRST_WALL=$(find "$WALL_DIR" -maxdepth 1 -type f | sort | head -1)
+WALL=$(find "$WALL_DIR" -maxdepth 1 -type f | sort | head -1)
+WALL="${WALL:-}"
+ok "wallpapers: $(find "$WALL_DIR" -maxdepth 1 -type f | wc -l) files"
 
 # ══════════════════════════════════════════════════════════════════════════════
 h "niri config"
 # ══════════════════════════════════════════════════════════════════════════════
 
 mkdir -p "$HOME/.config/niri"
-WALL_PATH="${FIRST_WALL:-$WALL_DIR/wallpaper.png}"
+SWAYBG_LINE=""
+[[ -n "$WALL" ]] && SWAYBG_LINE="spawn-at-startup \"swaybg\" \"-m\" \"fill\" \"-i\" \"${WALL}\""
 
 cat > "$HOME/.config/niri/config.kdl" << NIRI
-// ─── input ────────────────────────────────────────────────────────────────────
 input {
     keyboard {
         xkb { layout "us" }
@@ -97,7 +75,6 @@ input {
     focus-follows-mouse max-scroll-amount="0%"
 }
 
-// ─── layout ───────────────────────────────────────────────────────────────────
 layout {
     gaps 12
     preset-column-widths {
@@ -116,7 +93,6 @@ layout {
     struts { top 32 }
 }
 
-// ─── look ─────────────────────────────────────────────────────────────────────
 prefer-no-csd
 
 cursor {
@@ -125,7 +101,6 @@ cursor {
 }
 
 screenshot-path "~/Pictures/Screenshots/Screenshot_%Y-%m-%d_%H-%M-%S.png"
-
 hotkey-overlay { skip-at-startup }
 
 window-rule {
@@ -133,21 +108,32 @@ window-rule {
     clip-to-geometry true
 }
 
+// 1password — force float so the popup/quick-access window actually appears
+window-rule {
+    app-id r#"^1password$"#
+    open-floating true
+}
+
+// 1password quick access (separate popup window)
+window-rule {
+    title r#"^1Password —"#
+    open-floating true
+    default-column-width { fixed 400; }
+}
+
 animations { slowdown 0.7 }
 
-// ─── startup ──────────────────────────────────────────────────────────────────
 spawn-at-startup "quickshell"
 spawn-at-startup "mako"
 spawn-at-startup "nm-applet" "--indicator"
-spawn-at-startup "swaybg" "-m" "fill" "-i" "${WALL_PATH}"
+${SWAYBG_LINE}
 
-// ─── binds ────────────────────────────────────────────────────────────────────
 binds {
     Mod+Return        { spawn "ghostty"; }
     Mod+D             { spawn "fuzzel"; }
     Mod+E             { spawn "dolphin"; }
     Mod+B             { spawn "vivaldi-stable"; }
-    Mod+L             { spawn "swaylock" "-f" "-c" "191724"; }
+    Mod+Shift+L       { spawn "swaylock" "-f" "-c" "191724"; }
 
     Print             { screenshot; }
     Mod+Shift+S       { screenshot; }
@@ -173,10 +159,6 @@ binds {
     Mod+Shift+J       { move-window-down; }
     Mod+Shift+K       { move-window-up; }
     Mod+Shift+L       { move-column-right; }
-    Mod+Shift+Left    { move-column-left; }
-    Mod+Shift+Right   { move-column-right; }
-    Mod+Shift+Up      { move-window-up; }
-    Mod+Shift+Down    { move-window-down; }
 
     Mod+1             { focus-workspace 1; }
     Mod+2             { focus-workspace 2; }
@@ -211,6 +193,12 @@ binds {
     XF86MonBrightnessDown allow-when-locked=true { spawn "brightnessctl" "set" "10%-"; }
 }
 NIRI
+
+# validate config if niri is installed
+command -v niri &>/dev/null && \
+  niri validate --config "$HOME/.config/niri/config.kdl" 2>&1 | \
+  grep -v '^$' | head -5 || true
+
 ok "niri config written"
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -220,13 +208,12 @@ h "quickshell"
 mkdir -p "$HOME/.config/quickshell"
 
 cat > "$HOME/.config/quickshell/shell.qml" << 'QML'
+// Rosé Pine bar for Niri
 pragma Singleton
 pragma ComponentBehavior: Bound
 
 import Quickshell
 import Quickshell.Wayland
-import Quickshell.Services.UPower
-import Quickshell.SystemTray
 import Quickshell.Io
 import QtQuick
 import QtQuick.Layouts
@@ -234,91 +221,110 @@ import QtQuick.Layouts
 ShellRoot {
     id: root
 
-    // ── Rosé Pine ─────────────────────────────────────────────────────────────
-    readonly property color base:     "#191724"
-    readonly property color surface:  "#1f1d2e"
-    readonly property color overlay:  "#26233a"
-    readonly property color muted:    "#6e6a86"
-    readonly property color subtle:   "#908caa"
-    readonly property color text:     "#e0def4"
-    readonly property color love:     "#eb6f92"
-    readonly property color gold:     "#f6c177"
-    readonly property color foam:     "#9ccfd8"
+    // palette
+    readonly property string colBase:    "#f0191724"
+    readonly property string colText:    "#e0def4"
+    readonly property string colSubtle:  "#908caa"
+    readonly property string colMuted:   "#6e6a86"
+    readonly property string colOverlay: "#26233a"
+    readonly property string colLove:    "#eb6f92"
+    readonly property string colGold:    "#f6c177"
 
-    // ── niri workspaces (poll via niri msg) ───────────────────────────────────
+    // clock
+    property var now: new Date()
+    Timer {
+        interval: 10000; running: true; repeat: true; triggeredOnStart: true
+        onTriggered: root.now = new Date()
+    }
+
+    // niri workspaces
     property var workspaces: []
-
     Process {
         id: wsProc
         command: ["niri", "msg", "--json", "workspaces"]
         stdout: SplitParser {
             onRead: data => {
-                try { root.workspaces = JSON.parse(data) } catch (_) {}
+                try { root.workspaces = JSON.parse(data) } catch(_) {}
             }
         }
         onExited: running = false
     }
-
     Timer {
-        interval: 1500; running: true; repeat: true; triggeredOnStart: true
+        interval: 1000; running: true; repeat: true; triggeredOnStart: true
         onTriggered: if (!wsProc.running) wsProc.running = true
     }
 
-    // ── volume via wpctl ──────────────────────────────────────────────────────
-    property real  vol: 0
-    property bool  mute: false
-
+    // volume
+    property string volText: ""
     Process {
         id: volProc
-        command: ["bash", "-c", "wpctl get-volume @DEFAULT_AUDIO_SINK@"]
+        command: ["bash", "-c", "wpctl get-volume @DEFAULT_AUDIO_SINK@ 2>/dev/null || echo 'N/A'"]
         stdout: SplitParser {
             onRead: data => {
                 const m = data.match(/Volume:\s+([\d.]+)(\s+\[MUTED\])?/)
-                if (m) { root.vol = parseFloat(m[1]); root.mute = !!m[2] }
+                if (m) root.volText = m[2]
+                    ? "󰖁 mute"
+                    : `${parseFloat(m[1]) > 0.5 ? "󰕾" : "󰖀"} ${Math.round(parseFloat(m[1])*100)}%`
             }
         }
         onExited: running = false
     }
-
     Timer {
-        interval: 2000; running: true; repeat: true; triggeredOnStart: true
+        interval: 3000; running: true; repeat: true; triggeredOnStart: true
         onTriggered: if (!volProc.running) volProc.running = true
     }
 
-    // ── bar — one per screen ──────────────────────────────────────────────────
+    // battery
+    property string batText: ""
+    Process {
+        id: batProc
+        command: ["bash", "-c", `
+            BAT=/sys/class/power_supply/BAT0
+            [ -f $BAT/capacity ] || exit 0
+            CAP=$(cat $BAT/capacity)
+            STA=$(cat $BAT/status)
+            [ "$STA" = "Charging" ] && ICON="⚡" || ICON="🔋"
+            echo "$ICON ${CAP}%"
+        `]
+        stdout: SplitParser { onRead: data => root.batText = data.trim() }
+        onExited: running = false
+    }
+    Timer {
+        interval: 30000; running: true; repeat: true; triggeredOnStart: true
+        onTriggered: if (!batProc.running) batProc.running = true
+    }
+
+    // one bar per screen
     Variants {
         model: Quickshell.screens
 
         PanelWindow {
-            id: bar
             required property var modelData
             screen: modelData
             anchors { top: true; left: true; right: true }
             implicitHeight: 32
             color: "transparent"
-            WlrLayershell.namespace: "qs-bar"
             WlrLayershell.exclusiveZone: 32
 
             Rectangle {
                 anchors.fill: parent
-                color: Qt.rgba(0.098, 0.090, 0.141, 0.94)   // base #191724
+                color: root.colBase
 
                 RowLayout {
-                    anchors { fill: parent; leftMargin: 10; rightMargin: 10 }
+                    anchors { fill: parent; leftMargin: 12; rightMargin: 12 }
                     spacing: 0
 
                     // workspaces
                     Row {
                         spacing: 8
                         Layout.alignment: Qt.AlignVCenter
-
                         Repeater {
                             model: root.workspaces
                             Text {
                                 required property var modelData
                                 text: modelData.is_focused ? "●" : "○"
-                                color: modelData.is_focused ? root.love : root.overlay
-                                font { pixelSize: 11; family: "Noto Sans" }
+                                color: modelData.is_focused ? root.colLove : root.colOverlay
+                                font.pixelSize: 11
                                 verticalAlignment: Text.AlignVCenter
                             }
                         }
@@ -328,8 +334,8 @@ ShellRoot {
 
                     // clock
                     Text {
-                        text: Qt.formatDateTime(SystemClock.time, "hh:mm   yyyy-MM-dd")
-                        color: root.text
+                        text: Qt.formatDateTime(root.now, "hh:mm   yyyy-MM-dd")
+                        color: root.colText
                         font { pixelSize: 13; family: "Noto Sans"; weight: Font.Medium }
                         Layout.alignment: Qt.AlignVCenter
                     }
@@ -337,97 +343,28 @@ ShellRoot {
                     Item { Layout.fillWidth: true }
 
                     // volume
-                    Row {
-                        spacing: 5
+                    Text {
+                        text: root.volText
+                        color: root.colSubtle
+                        font { pixelSize: 12; family: "JetBrainsMono Nerd Font" }
                         Layout.alignment: Qt.AlignVCenter
                         Layout.rightMargin: 14
-
-                        Text {
-                            text: root.mute ? "󰖁" : (root.vol > 0.6 ? "󰕾" : root.vol > 0.2 ? "󰖀" : "󰕿")
-                            color: root.mute ? root.muted : root.subtle
-                            font { pixelSize: 14; family: "JetBrainsMono Nerd Font" }
-                            verticalAlignment: Text.AlignVCenter
-                        }
-                        Text {
-                            text: root.mute ? "mute" : `${Math.round(root.vol * 100)}%`
-                            color: root.subtle
-                            font { pixelSize: 12; family: "Noto Sans" }
-                            verticalAlignment: Text.AlignVCenter
-                        }
+                        visible: root.volText !== ""
                     }
 
                     // battery
-                    Repeater {
-                        model: UPower.devices.values.filter(d => d.isLaptopBattery)
-
-                        Row {
-                            required property var modelData
-                            spacing: 5
-                            Layout.alignment: Qt.AlignVCenter
-                            Layout.rightMargin: 14
-
-                            Text {
-                                text: {
-                                    if (modelData.state === UPowerDeviceState.Charging) return "⚡"
-                                    const p = modelData.percentage
-                                    if (p > 0.85) return "󰁹"
-                                    if (p > 0.6)  return "󰂁"
-                                    if (p > 0.4)  return "󰁿"
-                                    if (p > 0.2)  return "󰁽"
-                                    return "󰁺"
-                                }
-                                color: {
-                                    const p = modelData.percentage
-                                    if (p < 0.15) return root.love
-                                    if (p < 0.3)  return root.gold
-                                    return root.subtle
-                                }
-                                font { pixelSize: 14; family: "JetBrainsMono Nerd Font" }
-                                verticalAlignment: Text.AlignVCenter
-                            }
-                            Text {
-                                text: `${Math.round(modelData.percentage * 100)}%`
-                                color: root.subtle
-                                font { pixelSize: 12; family: "Noto Sans" }
-                                verticalAlignment: Text.AlignVCenter
-                            }
-                        }
-                    }
-
-                    // system tray
-                    Row {
-                        spacing: 6
+                    Text {
+                        text: root.batText
+                        color: root.colSubtle
+                        font { pixelSize: 12; family: "Noto Sans" }
                         Layout.alignment: Qt.AlignVCenter
-
-                        Repeater {
-                            model: SystemTray.items.values
-
-                            Item {
-                                required property var modelData
-                                width: 18; height: 18
-
-                                Image {
-                                    anchors.fill: parent
-                                    source: modelData.icon
-                                    fillMode: Image.PreserveAspectFit
-                                    smooth: true
-                                }
-                                MouseArea {
-                                    anchors.fill: parent
-                                    acceptedButtons: Qt.LeftButton | Qt.RightButton
-                                    onClicked: mouse => mouse.button === Qt.LeftButton
-                                        ? modelData.activate()
-                                        : modelData.secondaryActivate()
-                                }
-                            }
-                        }
+                        visible: root.batText !== ""
                     }
-
-                } // RowLayout
-            } // Rectangle
-        } // PanelWindow
-    } // Variants
-} // ShellRoot
+                }
+            }
+        }
+    }
+}
 QML
 ok "quickshell shell.qml written"
 
@@ -439,10 +376,8 @@ mkdir -p "$HOME/.config/fuzzel"
 cat > "$HOME/.config/fuzzel/fuzzel.ini" << 'FUZZEL'
 [main]
 font=Noto Sans:size=13
-dpi-aware=no
 width=35
 lines=8
-tabs=4
 horizontal-pad=20
 vertical-pad=12
 inner-pad=8
@@ -461,9 +396,6 @@ border=26233aff
 [border]
 width=1
 radius=8
-
-[dmenu]
-exit-immediately-if-empty=yes
 FUZZEL
 ok "fuzzel configured"
 
@@ -482,8 +414,6 @@ height=120
 border-size=1
 border-color=#26233a
 border-radius=8
-icons=1
-icon-location=left
 max-icon-size=48
 default-timeout=5000
 font=Noto Sans 13
@@ -503,15 +433,12 @@ h "swaylock"
 mkdir -p "$HOME/.config/swaylock"
 cat > "$HOME/.config/swaylock/config" << 'SWAYLOCK'
 color=191724
-inside-color=191724
 ring-color=26233a
 ring-clear-color=9ccfd8
 ring-ver-color=31748f
 ring-wrong-color=eb6f92
 key-hl-color=eb6f92
-bs-hl-color=f6c177
 text-color=e0def4
-text-wrong-color=eb6f92
 indicator-radius=80
 indicator-thickness=8
 font=Noto Sans
@@ -540,7 +467,18 @@ gtk-icon-theme-name=Papirus-Dark
 gtk-cursor-theme-name=bibata-modern-classic
 gtk-font-name=Noto Sans 11
 gtk-application-prefer-dark-theme=1
+gtk-color-scheme=prefer-dark
 GTK4
+
+# set via gsettings so libadwaita/GNOME apps respect it
+if command -v gsettings &>/dev/null; then
+  gsettings set org.gnome.desktop.interface color-scheme     prefer-dark
+  gsettings set org.gnome.desktop.interface gtk-theme        rose-pine
+  gsettings set org.gnome.desktop.interface icon-theme       Papirus-Dark
+  gsettings set org.gnome.desktop.interface cursor-theme     bibata-modern-classic
+  gsettings set org.gnome.desktop.interface font-name        "Noto Sans 11"
+  gsettings set org.gnome.desktop.interface monospace-font-name "JetBrainsMono Nerd Font 12"
+fi
 
 cat > "$HOME/.icons/default/index.theme" << 'CURSOR'
 [Icon Theme]
@@ -568,77 +506,62 @@ cat > "$HOME/.config/fontconfig/fonts.conf" << 'FONTCONF'
     <prefer><family>Noto Sans</family></prefer></alias>
 </fontconfig>
 FONTCONF
-
 fc-cache -fv &>/dev/null
-ok "GTK, cursor, fonts configured"
+ok "GTK, cursor, fonts done"
 
 # ══════════════════════════════════════════════════════════════════════════════
-h "power"
+h "environment"
 # ══════════════════════════════════════════════════════════════════════════════
 
-cat > "$HOME/.config/powermanagementprofilesrc" << 'POWER'
-[AC][BrightnessControl]
-value=100
+mkdir -p "$HOME/.config/environment.d"
+cat > "$HOME/.config/environment.d/niri.conf" << 'ENV'
+MOZ_ENABLE_WAYLAND=1
+ELECTRON_OZONE_PLATFORM_HINT=wayland
+QT_QPA_PLATFORM=wayland;xcb
+QT_QPA_PLATFORMTHEME=gtk3
+GTK_THEME=rose-pine
+SDL_VIDEODRIVER=wayland
+CLUTTER_BACKEND=wayland
+XDG_CURRENT_DESKTOP=niri
+XDG_SESSION_TYPE=wayland
+NIXOS_OZONE_WL=1
+# 1Password — needed for popup to work on non-GNOME/KDE Wayland
+_1PASSWORD_SKIP_APPINDICATOR=1
+ENV
 
-[AC][DimDisplay]
-idleTime=0
+# 1Password CLI flags — force Wayland + allow popup via xdg-activation
+mkdir -p "$HOME/.config/1Password"
+cat > "$HOME/.config/1Password/flags" << 'FLAGS'
+--enable-features=UseOzonePlatform,WaylandWindowDecorations
+--ozone-platform=wayland
+--disable-gpu-sandbox
+FLAGS
+ok "environment set"
 
-[AC][DPMSControl]
-idleTime=0
-lockBeforeTurnOff=0
-
-[AC][HandleButtonEvents]
-lidAction=0
-powerButtonAction=1
-
-[AC][SuspendSession]
-idleTime=0
-suspendThenHibernate=false
-suspendType=0
-
-[Battery][BrightnessControl]
-value=80
-
-[Battery][DimDisplay]
-idleTime=120000
-
-[Battery][DPMSControl]
-idleTime=300000
-lockBeforeTurnOff=1
-
-[Battery][HandleButtonEvents]
-lidAction=1
-powerButtonAction=1
-
-[Battery][SuspendSession]
-idleTime=1200000
-suspendThenHibernate=false
-suspendType=1
-
-[LowBattery][BrightnessControl]
-value=50
-
-[LowBattery][DimDisplay]
-idleTime=60000
-
-[LowBattery][DPMSControl]
-idleTime=120000
-lockBeforeTurnOff=1
-
-[LowBattery][SuspendSession]
-idleTime=300000
-suspendThenHibernate=true
-suspendType=1
-POWER
-ok "power management configured"
+# ══════════════════════════════════════════════════════════════════════════════
+# if already inside a niri session, restart services live
+# ══════════════════════════════════════════════════════════════════════════════
+if [[ "${XDG_CURRENT_DESKTOP:-}" == "niri" ]]; then
+  h "reloading live services"
+  pkill -x quickshell 2>/dev/null || true; sleep 0.5
+  nohup quickshell &>/dev/null & disown
+  pkill -x mako 2>/dev/null || true; sleep 0.3
+  nohup mako &>/dev/null & disown
+  niri msg action reload-config 2>/dev/null || true
+  ok "services restarted"
+fi
 
 # ══════════════════════════════════════════════════════════════════════════════
 echo -e "\n${W}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${D}"
-echo -e "${G}  ✔  Niri rice done${D}"
+echo -e "${G}  ✔  rice done${D}"
 echo -e "${W}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${D}\n"
-echo -e "  ${C}log in:${D}     select Niri from SDDM session menu"
-echo -e "  ${C}terminal:${D}   Mod+Return"
-echo -e "  ${C}launcher:${D}   Mod+D"
-echo -e "  ${C}close:${D}      Mod+Q"
-echo -e "  ${C}lock:${D}       Mod+L"
-echo -e "  ${C}quit niri:${D}  Mod+Shift+E\n"
+if [[ "${XDG_CURRENT_DESKTOP:-}" != "niri" ]]; then
+  echo -e "  ${Y}not in a niri session — configs written but not active yet${D}"
+  echo -e "  log out and select ${W}Niri${D} from the SDDM session picker\n"
+fi
+echo -e "  ${C}Mod${D} = Super/Win key"
+echo -e "  ${C}Mod+Return${D}    terminal"
+echo -e "  ${C}Mod+D${D}         launcher"
+echo -e "  ${C}Mod+Q${D}         close window"
+echo -e "  ${C}Mod+Shift+L${D}   lock screen"
+echo -e "  ${C}Mod+Shift+E${D}   quit niri\n"
