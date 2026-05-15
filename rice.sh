@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ══════════════════════════════════════════════════════════════════════════════
-#  rice.sh — Niri + Quickshell
+#  rice.sh — Niri + Noctalia Shell
 #  Rosé Pine · fuzzel · mako · swaylock
 # ══════════════════════════════════════════════════════════════════════════════
 set -euo pipefail
@@ -12,7 +12,8 @@ h()   { echo -e "\n${W}━━━  $*  ━━━${D}"; }
 
 [[ $EUID -eq 0 ]] && { echo "run as normal user"; exit 1; }
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-IN_NIRI=[[ "${XDG_CURRENT_DESKTOP:-}" == "niri" ]] && echo true || echo false
+
+echo -e "\n${W}  Niri + Noctalia Shell — Rosé Pine${D}\n"
 
 # ══════════════════════════════════════════════════════════════════════════════
 h "packages"
@@ -22,11 +23,12 @@ sudo pacman -S --needed --noconfirm \
   fuzzel mako swaylock grim slurp wl-clipboard swaybg \
   xdg-desktop-portal-gnome network-manager-applet \
   papirus-icon-theme noto-fonts ttf-jetbrains-mono-nerd \
-  libnotify brightnessctl
+  libnotify brightnessctl xwayland-satellite
 
 GIT_TERMINAL_PROMPT=0 PAGER=cat \
-  paru -S --needed --noconfirm niri-bin quickshell-git \
-  bibata-cursor-theme rose-pine-gtk-theme-full \
+  paru -S --needed --noconfirm \
+  niri-bin noctalia-shell bibata-cursor-theme \
+  rose-pine-gtk-theme-full \
   </dev/null 2>/dev/null || warn "some AUR packages skipped"
 
 ok "packages done"
@@ -42,7 +44,6 @@ mkdir -p "$WALL_DIR"
     \( -iname "*.jpg" -o -iname "*.jpeg" -o -iname "*.png" -o -iname "*.webp" \) \
     -exec cp -n {} "$WALL_DIR/" \;
 WALL=$(find "$WALL_DIR" -maxdepth 1 -type f | sort | head -1)
-WALL="${WALL:-}"
 ok "wallpapers: $(find "$WALL_DIR" -maxdepth 1 -type f | wc -l) files"
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -51,15 +52,18 @@ h "niri config"
 
 mkdir -p "$HOME/.config/niri"
 SWAYBG_LINE=""
-[[ -n "$WALL" ]] && SWAYBG_LINE="spawn-at-startup \"swaybg\" \"-m\" \"fill\" \"-i\" \"${WALL}\""
+[[ -n "${WALL:-}" ]] && SWAYBG_LINE="spawn-at-startup \"swaybg\" \"-m\" \"fill\" \"-i\" \"${WALL}\""
 
 cat > "$HOME/.config/niri/config.kdl" << NIRI
+prefer-no-csd
+
 input {
     keyboard {
         xkb { layout "us" }
-        repeat-delay 300
-        repeat-rate 50
+        repeat-delay 200
+        repeat-rate 35
     }
+
     touchpad {
         tap
         dwt
@@ -68,53 +72,57 @@ input {
         accel-speed 0.2
         accel-profile "adaptive"
     }
+
     mouse {
         accel-speed 0.0
         accel-profile "flat"
     }
+
     focus-follows-mouse max-scroll-amount="0%"
 }
 
 layout {
-    gaps 0
+    gaps 5
+
     preset-column-widths {
         proportion 0.33333
         proportion 0.5
         proportion 0.66667
         proportion 1.0
     }
+
     default-column-width { proportion 0.5; }
+
     focus-ring {
-        width 2
+        width 1.5
         active-color "#eb6f92"
         inactive-color "#26233a"
     }
+
     border { off }
+
     struts { top 32 }
 }
-
-prefer-no-csd
 
 cursor {
     theme "bibata-modern-classic"
     size 24
 }
 
-screenshot-path "~/Pictures/Screenshots/Screenshot_%Y-%m-%d_%H-%M-%S.png"
+screenshot-path "~/Pictures/Screenshots/Screenshot from %Y-%m-%d %H-%M-%S.png"
+
 hotkey-overlay { skip-at-startup }
 
 window-rule {
-    geometry-corner-radius 8
+    geometry-corner-radius 4
     clip-to-geometry true
 }
 
-// 1password — force float so the popup/quick-access window actually appears
+// 1password — force float so popup appears
 window-rule {
     app-id r#"^1password$"#
     open-floating true
 }
-
-// 1password quick access (separate popup window)
 window-rule {
     title r#"^1Password —"#
     open-floating true
@@ -123,67 +131,84 @@ window-rule {
 
 animations { slowdown 0.7 }
 
-spawn-at-startup "quickshell"
+spawn-at-startup "noctalia-shell"
 spawn-at-startup "mako"
 spawn-at-startup "nm-applet" "--indicator"
+spawn-at-startup "xwayland-satellite"
 ${SWAYBG_LINE}
 
 binds {
-    Mod+Return        { spawn "ghostty"; }
-    Mod+D             { spawn "fuzzel"; }
-    Mod+E             { spawn "dolphin"; }
-    Mod+B             { spawn "vivaldi-stable"; }
-    Mod+Shift+L       { spawn "swaylock" "-f" "-c" "191724"; }
+    Mod+Return hotkey-overlay-title="Open Terminal: ghostty" { spawn "ghostty"; }
+    Mod+D      hotkey-overlay-title="Run Application: fuzzel" { spawn "fuzzel"; }
+    Mod+E      hotkey-overlay-title="File Manager: dolphin"   { spawn "dolphin"; }
+    Mod+B      hotkey-overlay-title="Browser: vivaldi"        { spawn "vivaldi-stable"; }
+    Mod+Shift+L hotkey-overlay-title="Lock Screen"            { spawn "swaylock" "-f" "-c" "191724"; }
 
-    Print             { screenshot; }
-    Mod+Shift+S       { screenshot; }
-    Mod+S             { screenshot-screen; }
+    Print       { screenshot; }
+    Mod+S       { screenshot; }
+    Ctrl+Print  { screenshot-screen; }
+    Alt+Print   { screenshot-window; }
 
-    Mod+Q             { close-window; }
-    Mod+F             { maximize-column; }
-    Mod+Shift+F       { fullscreen-window; }
-    Mod+C             { center-column; }
-    Mod+R             { switch-preset-column-width; }
-    Mod+Shift+R       { reset-window-height; }
+    Mod+Q { close-window; }
+    Mod+O { overview-toggle; }
+    Mod+F { maximize-column; }
+    Mod+Shift+F { fullscreen-window; }
+    Mod+C { center-column; }
+    Mod+R { switch-preset-column-width; }
+    Mod+Shift+R { reset-window-height; }
 
-    Mod+H             { focus-column-left; }
-    Mod+J             { focus-window-down; }
-    Mod+K             { focus-window-up; }
-    Mod+L             { focus-column-right; }
-    Mod+Left          { focus-column-left; }
-    Mod+Right         { focus-column-right; }
-    Mod+Up            { focus-window-up; }
-    Mod+Down          { focus-window-down; }
+    Mod+H     { focus-column-left; }
+    Mod+J     { focus-window-down; }
+    Mod+K     { focus-window-up; }
+    Mod+L     { focus-column-right; }
+    Mod+Left  { focus-column-left; }
+    Mod+Right { focus-column-right; }
+    Mod+Up    { focus-window-up; }
+    Mod+Down  { focus-window-down; }
 
-    Mod+Shift+H       { move-column-left; }
-    Mod+Shift+J       { move-window-down; }
-    Mod+Shift+K       { move-window-up; }
-    Mod+Shift+L       { move-column-right; }
+    Mod+Shift+H     { move-column-left; }
+    Mod+Shift+J     { move-window-down; }
+    Mod+Shift+K     { move-window-up; }
+    Mod+Shift+L     { move-column-right; }
+    Mod+Shift+Left  { move-column-left; }
+    Mod+Shift+Right { move-column-right; }
+    Mod+Shift+Up    { move-window-up; }
+    Mod+Shift+Down  { move-window-down; }
 
-    Mod+1             { focus-workspace 1; }
-    Mod+2             { focus-workspace 2; }
-    Mod+3             { focus-workspace 3; }
-    Mod+4             { focus-workspace 4; }
-    Mod+5             { focus-workspace 5; }
-    Mod+Shift+1       { move-window-to-workspace 1; }
-    Mod+Shift+2       { move-window-to-workspace 2; }
-    Mod+Shift+3       { move-window-to-workspace 3; }
-    Mod+Shift+4       { move-window-to-workspace 4; }
-    Mod+Shift+5       { move-window-to-workspace 5; }
-    Mod+Tab           { focus-workspace-previous; }
-    Mod+Page_Down     { focus-workspace-down; }
-    Mod+Page_Up       { focus-workspace-up; }
+    Mod+1 { focus-workspace 1; }
+    Mod+2 { focus-workspace 2; }
+    Mod+3 { focus-workspace 3; }
+    Mod+4 { focus-workspace 4; }
+    Mod+5 { focus-workspace 5; }
+    Mod+6 { focus-workspace 6; }
+    Mod+7 { focus-workspace 7; }
+    Mod+8 { focus-workspace 8; }
+    Mod+9 { focus-workspace 9; }
 
-    Mod+Minus         { set-column-width "-10%"; }
-    Mod+Equal         { set-column-width "+10%"; }
-    Mod+Shift+Minus   { set-window-height "-10%"; }
-    Mod+Shift+Equal   { set-window-height "+10%"; }
+    Mod+Shift+1 { move-column-to-workspace 1; }
+    Mod+Shift+2 { move-column-to-workspace 2; }
+    Mod+Shift+3 { move-column-to-workspace 3; }
+    Mod+Shift+4 { move-column-to-workspace 4; }
+    Mod+Shift+5 { move-column-to-workspace 5; }
+    Mod+Shift+6 { move-column-to-workspace 6; }
+    Mod+Shift+7 { move-column-to-workspace 7; }
+    Mod+Shift+8 { move-column-to-workspace 8; }
+    Mod+Shift+9 { move-column-to-workspace 9; }
+
+    Mod+Tab       { focus-workspace-previous; }
+    Mod+Page_Down { focus-workspace-down; }
+    Mod+Page_Up   { focus-workspace-up; }
+
+    Mod+Minus       { set-column-width "-10%"; }
+    Mod+Equal       { set-column-width "+10%"; }
+    Mod+Shift+Minus { set-window-height "-10%"; }
+    Mod+Shift+Equal { set-window-height "+10%"; }
 
     Mod+WheelScrollDown cooldown-ms=150 { focus-workspace-down; }
     Mod+WheelScrollUp   cooldown-ms=150 { focus-workspace-up; }
 
-    Mod+Shift+E       { quit; }
-    Mod+Shift+P       { power-off-monitors; }
+    Mod+Shift+E { quit; }
+    Mod+Shift+P { power-off-monitors; }
 
     XF86AudioRaiseVolume  allow-when-locked=true { spawn "wpctl" "set-volume" "@DEFAULT_AUDIO_SINK@" "0.1+"; }
     XF86AudioLowerVolume  allow-when-locked=true { spawn "wpctl" "set-volume" "@DEFAULT_AUDIO_SINK@" "0.1-"; }
@@ -194,179 +219,57 @@ binds {
 }
 NIRI
 
-# validate config if niri is installed
 command -v niri &>/dev/null && \
-  niri validate --config "$HOME/.config/niri/config.kdl" 2>&1 | \
-  grep -v '^$' | head -5 || true
-
+  niri validate --config "$HOME/.config/niri/config.kdl" 2>&1 | head -5 || true
 ok "niri config written"
 
 # ══════════════════════════════════════════════════════════════════════════════
-h "quickshell"
+h "noctalia shell"
 # ══════════════════════════════════════════════════════════════════════════════
 
-mkdir -p "$HOME/.config/quickshell"
+mkdir -p "$HOME/.config/quickshell/noctalia"
 
-cat > "$HOME/.config/quickshell/shell.qml" << 'QML'
-// Rosé Pine bar for Niri
-pragma Singleton
-pragma ComponentBehavior: Bound
-
-import Quickshell
-import Quickshell.Wayland
-import Quickshell.Io
-import QtQuick
-import QtQuick.Layouts
-
-ShellRoot {
-    id: root
-
-    // palette
-    readonly property string colBase:    "#f0191724"
-    readonly property string colText:    "#e0def4"
-    readonly property string colSubtle:  "#908caa"
-    readonly property string colMuted:   "#6e6a86"
-    readonly property string colOverlay: "#26233a"
-    readonly property string colLove:    "#eb6f92"
-    readonly property string colGold:    "#f6c177"
-
-    // clock
-    property var now: new Date()
-    Timer {
-        interval: 10000; running: true; repeat: true; triggeredOnStart: true
-        onTriggered: root.now = new Date()
-    }
-
-    // niri workspaces
-    property var workspaces: []
-    Process {
-        id: wsProc
-        command: ["niri", "msg", "--json", "workspaces"]
-        stdout: SplitParser {
-            onRead: data => {
-                try { root.workspaces = JSON.parse(data) } catch(_) {}
-            }
+cat > "$HOME/.config/quickshell/noctalia/settings.json" << JSON
+{
+    "bar": {
+        "position": "top",
+        "widgets": {
+            "left": [
+                { "id": "SystemMonitor", "showCpuTemp": false, "showCpuUsage": true, "showMemoryUsage": true },
+                { "id": "ActiveWindow", "showIcon": true, "maxWidth": 200 },
+                { "id": "MediaMini", "maxWidth": 150 }
+            ],
+            "center": [
+                { "id": "Workspace", "labelMode": "number", "hideUnoccupied": true }
+            ],
+            "right": [
+                { "id": "Tray" },
+                { "id": "Battery" },
+                { "id": "Volume" },
+                { "id": "Clock", "formatHorizontal": "HH:mm  yyyy-MM-dd" },
+                { "id": "ControlCenter" }
+            ]
         }
-        onExited: running = false
-    }
-    Timer {
-        interval: 1000; running: true; repeat: true; triggeredOnStart: true
-        onTriggered: if (!wsProc.running) wsProc.running = true
-    }
-
-    // volume
-    property string volText: ""
-    Process {
-        id: volProc
-        command: ["bash", "-c", "wpctl get-volume @DEFAULT_AUDIO_SINK@ 2>/dev/null || echo 'N/A'"]
-        stdout: SplitParser {
-            onRead: data => {
-                const m = data.match(/Volume:\s+([\d.]+)(\s+\[MUTED\])?/)
-                if (m) root.volText = m[2]
-                    ? "󰖁 mute"
-                    : `${parseFloat(m[1]) > 0.5 ? "󰕾" : "󰖀"} ${Math.round(parseFloat(m[1])*100)}%`
-            }
-        }
-        onExited: running = false
-    }
-    Timer {
-        interval: 3000; running: true; repeat: true; triggeredOnStart: true
-        onTriggered: if (!volProc.running) volProc.running = true
-    }
-
-    // battery
-    property string batText: ""
-    Process {
-        id: batProc
-        command: ["bash", "-c", `
-            BAT=/sys/class/power_supply/BAT0
-            [ -f $BAT/capacity ] || exit 0
-            CAP=$(cat $BAT/capacity)
-            STA=$(cat $BAT/status)
-            [ "$STA" = "Charging" ] && ICON="⚡" || ICON="🔋"
-            echo "$ICON ${CAP}%"
-        `]
-        stdout: SplitParser { onRead: data => root.batText = data.trim() }
-        onExited: running = false
-    }
-    Timer {
-        interval: 30000; running: true; repeat: true; triggeredOnStart: true
-        onTriggered: if (!batProc.running) batProc.running = true
-    }
-
-    // one bar per screen
-    Variants {
-        model: Quickshell.screens
-
-        PanelWindow {
-            required property var modelData
-            screen: modelData
-            anchors { top: true; left: true; right: true }
-            implicitHeight: 32
-            color: "transparent"
-            WlrLayershell.exclusiveZone: 32
-
-            Rectangle {
-                anchors.fill: parent
-                color: root.colBase
-
-                RowLayout {
-                    anchors { fill: parent; leftMargin: 12; rightMargin: 12 }
-                    spacing: 0
-
-                    // workspaces
-                    Row {
-                        spacing: 8
-                        Layout.alignment: Qt.AlignVCenter
-                        Repeater {
-                            model: root.workspaces
-                            Text {
-                                required property var modelData
-                                text: modelData.is_focused ? "●" : "○"
-                                color: modelData.is_focused ? root.colLove : root.colOverlay
-                                font.pixelSize: 11
-                                verticalAlignment: Text.AlignVCenter
-                            }
-                        }
-                    }
-
-                    Item { Layout.fillWidth: true }
-
-                    // clock
-                    Text {
-                        text: Qt.formatDateTime(root.now, "hh:mm   yyyy-MM-dd")
-                        color: root.colText
-                        font { pixelSize: 13; family: "Noto Sans"; weight: Font.Medium }
-                        Layout.alignment: Qt.AlignVCenter
-                    }
-
-                    Item { Layout.fillWidth: true }
-
-                    // volume
-                    Text {
-                        text: root.volText
-                        color: root.colSubtle
-                        font { pixelSize: 12; family: "JetBrainsMono Nerd Font" }
-                        Layout.alignment: Qt.AlignVCenter
-                        Layout.rightMargin: 14
-                        visible: root.volText !== ""
-                    }
-
-                    // battery
-                    Text {
-                        text: root.batText
-                        color: root.colSubtle
-                        font { pixelSize: 12; family: "Noto Sans" }
-                        Layout.alignment: Qt.AlignVCenter
-                        visible: root.batText !== ""
-                    }
-                }
-            }
-        }
+    },
+    "wallpaper": {
+        "directory": "${WALL_DIR}",
+        "enabled": true,
+        "fillMode": "crop",
+        "randomEnabled": true,
+        "randomIntervalSec": 1800,
+        "transitionDuration": 1000
+    },
+    "colorSchemes": {
+        "darkMode": true,
+        "predefinedScheme": "Rosé Pine"
+    },
+    "ui": {
+        "fontDefault": "JetBrainsMono Nerd Font Propo",
+        "borderRadius": 4
     }
 }
-QML
-ok "quickshell shell.qml written"
+JSON
+ok "noctalia settings written"
 
 # ══════════════════════════════════════════════════════════════════════════════
 h "fuzzel"
@@ -395,7 +298,7 @@ border=26233aff
 
 [border]
 width=1
-radius=8
+radius=4
 FUZZEL
 ok "fuzzel configured"
 
@@ -413,7 +316,7 @@ width=360
 height=120
 border-size=1
 border-color=#26233a
-border-radius=8
+border-radius=4
 max-icon-size=48
 default-timeout=5000
 font=Noto Sans 13
@@ -470,14 +373,13 @@ gtk-application-prefer-dark-theme=1
 gtk-color-scheme=prefer-dark
 GTK4
 
-# set via gsettings so libadwaita/GNOME apps respect it
 if command -v gsettings &>/dev/null; then
-  gsettings set org.gnome.desktop.interface color-scheme     prefer-dark
-  gsettings set org.gnome.desktop.interface gtk-theme        rose-pine
-  gsettings set org.gnome.desktop.interface icon-theme       Papirus-Dark
-  gsettings set org.gnome.desktop.interface cursor-theme     bibata-modern-classic
-  gsettings set org.gnome.desktop.interface font-name        "Noto Sans 11"
-  gsettings set org.gnome.desktop.interface monospace-font-name "JetBrainsMono Nerd Font 12"
+  gsettings set org.gnome.desktop.interface color-scheme          prefer-dark
+  gsettings set org.gnome.desktop.interface gtk-theme             rose-pine
+  gsettings set org.gnome.desktop.interface icon-theme            Papirus-Dark
+  gsettings set org.gnome.desktop.interface cursor-theme          bibata-modern-classic
+  gsettings set org.gnome.desktop.interface font-name             "Noto Sans 11"
+  gsettings set org.gnome.desktop.interface monospace-font-name   "JetBrainsMono Nerd Font 12"
 fi
 
 cat > "$HOME/.icons/default/index.theme" << 'CURSOR'
@@ -525,11 +427,9 @@ CLUTTER_BACKEND=wayland
 XDG_CURRENT_DESKTOP=niri
 XDG_SESSION_TYPE=wayland
 NIXOS_OZONE_WL=1
-# 1Password — needed for popup to work on non-GNOME/KDE Wayland
 _1PASSWORD_SKIP_APPINDICATOR=1
 ENV
 
-# 1Password CLI flags — force Wayland + allow popup via xdg-activation
 mkdir -p "$HOME/.config/1Password"
 cat > "$HOME/.config/1Password/flags" << 'FLAGS'
 --enable-features=UseOzonePlatform,WaylandWindowDecorations
@@ -539,29 +439,21 @@ FLAGS
 ok "environment set"
 
 # ══════════════════════════════════════════════════════════════════════════════
-# if already inside a niri session, restart services live
-# ══════════════════════════════════════════════════════════════════════════════
+# live reload if inside niri
 if [[ "${XDG_CURRENT_DESKTOP:-}" == "niri" ]]; then
-  h "reloading live services"
-  pkill -x quickshell 2>/dev/null || true; sleep 0.5
-  nohup quickshell &>/dev/null & disown
+  h "reloading"
+  niri msg action reload-config 2>/dev/null || true
+  pkill -x noctalia-shell 2>/dev/null || true; sleep 0.5
+  nohup noctalia-shell &>/dev/null & disown
   pkill -x mako 2>/dev/null || true; sleep 0.3
   nohup mako &>/dev/null & disown
-  niri msg action reload-config 2>/dev/null || true
-  ok "services restarted"
+  ok "reloaded"
 fi
 
-# ══════════════════════════════════════════════════════════════════════════════
 echo -e "\n${W}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${D}"
-echo -e "${G}  ✔  rice done${D}"
+echo -e "${G}  ✔  done${D}"
 echo -e "${W}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${D}\n"
-if [[ "${XDG_CURRENT_DESKTOP:-}" != "niri" ]]; then
-  echo -e "  ${Y}not in a niri session — configs written but not active yet${D}"
-  echo -e "  log out and select ${W}Niri${D} from the SDDM session picker\n"
-fi
-echo -e "  ${C}Mod${D} = Super/Win key"
-echo -e "  ${C}Mod+Return${D}    terminal"
-echo -e "  ${C}Mod+D${D}         launcher"
-echo -e "  ${C}Mod+Q${D}         close window"
-echo -e "  ${C}Mod+Shift+L${D}   lock screen"
-echo -e "  ${C}Mod+Shift+E${D}   quit niri\n"
+[[ "${XDG_CURRENT_DESKTOP:-}" != "niri" ]] && \
+  echo -e "  ${Y}log out → select Niri from SDDM session picker${D}\n"
+echo -e "  ${C}Mod+Return${D}   terminal  |  ${C}Mod+D${D}  launcher  |  ${C}Mod+O${D}  overview"
+echo -e "  ${C}Mod+Q${D}        close     |  ${C}Mod+1-9${D} workspaces\n"
